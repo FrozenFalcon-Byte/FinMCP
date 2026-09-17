@@ -1,0 +1,26 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Env / secrets
+.env
+
+# Data
+data/*.db
+data/*.db-journal
+data/uploads/
+
+# Node
+web/node_modules/
+web/dist/
+
+# Progress dashboard artefacts
+progress/junit.xml
+
+# OS
+.DS_Store

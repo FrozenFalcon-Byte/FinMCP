@@ -1,0 +1,319 @@
+{
+  "project": "FinMCP",
+  "tagline": "Personal finance copilot, MCP-native",
+  "started": "2026-09-17T17:25:00+05:30",
+  "phases": [
+    {
+      "id": "P0",
+      "name": "Foundation & tracker",
+      "goal": "Toolchain, repo scaffold, and this progress dashboard so every later step is visible.",
+      "weight": 1,
+      "tasks": [
+        {
+          "id": "P0.1",
+          "title": "Toolchain audit (Python 3.13, Node 22, Tesseract, SQLite) and virtualenv",
+          "status": "done"
+        },
+        {
+          "id": "P0.2",
+          "title": "Game plan written as data (phases, tasks, weights)",
+          "status": "done"
+        },
+        {
+          "id": "P0.3",
+          "title": "Progress dashboard: generator, vitals scanner, page",
+          "status": "done"
+        },
+        {
+          "id": "P0.4",
+          "title": "Repo scaffold: pyproject, README skeleton, .gitignore, .env.example, git init",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "P1",
+      "name": "MCP server core",
+      "goal": "A standalone FinMCP server (official mcp SDK 2.x) owning SQLite and exposing tools, resources and prompts. Milestone: works in Claude Desktop with zero frontend.",
+      "weight": 4,
+      "tasks": [
+        {
+          "id": "P1.1",
+          "title": "SQLite schema and migrations: transactions, categories, budgets, merchant memory, audit log",
+          "status": "todo"
+        },
+        {
+          "id": "P1.2",
+          "title": "Typed repository layer (data access, read-only SQL guard)",
+          "status": "todo"
+        },
+        {
+          "id": "P1.3",
+          "title": "Category taxonomy and realistic seed data (about 90 days, INR)",
+          "status": "todo"
+        },
+        {
+          "id": "P1.4",
+          "title": "LLM provider abstraction: Anthropic SDK plus deterministic rule-based fallback",
+          "status": "todo"
+        },
+        {
+          "id": "P1.5",
+          "title": "Tools: add_transaction, update_transaction, delete_transaction, list_transactions",
+          "status": "todo"
+        },
+        {
+          "id": "P1.6",
+          "title": "Tool: categorize_transaction with confidence score and merchant memory",
+          "status": "todo"
+        },
+        {
+          "id": "P1.7",
+          "title": "Tool: query_transactions (text-to-SQL) and run_sql (guarded SELECT)",
+          "status": "todo"
+        },
+        {
+          "id": "P1.8",
+          "title": "Tool: get_summary (period, category, budget vs actual)",
+          "status": "todo"
+        },
+        {
+          "id": "P1.9",
+          "title": "Resources: categories, recent transactions, monthly summaries, schema",
+          "status": "todo"
+        },
+        {
+          "id": "P1.10",
+          "title": "Prompts: monthly_spending_review, categorize_uncategorized",
+          "status": "todo"
+        },
+        {
+          "id": "P1.11",
+          "title": "Transports: stdio and streamable HTTP, CLI entry point",
+          "status": "todo"
+        },
+        {
+          "id": "P1.12",
+          "title": "Test suite over an in-memory MCP client session",
+          "status": "todo"
+        },
+        {
+          "id": "P1.13",
+          "title": "Claude Desktop milestone: config installer script and walkthrough",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "Ingestion pipeline",
+      "goal": "Receipts, bank statement PDFs and UPI SMS become normalized transactions through one import tool that auto-categorizes.",
+      "weight": 3,
+      "tasks": [
+        {
+          "id": "P2.1",
+          "title": "Parser interface and normalized ParsedTransaction model with dedupe fingerprint",
+          "status": "todo"
+        },
+        {
+          "id": "P2.2",
+          "title": "Receipt OCR: Tesseract text plus vision-LLM extraction, rule-based fallback",
+          "status": "todo"
+        },
+        {
+          "id": "P2.3",
+          "title": "Bank statement parser: pdfplumber tables and CSV exports",
+          "status": "todo"
+        },
+        {
+          "id": "P2.4",
+          "title": "UPI and bank SMS parser: regex library for Indian bank formats plus LLM cleanup",
+          "status": "todo"
+        },
+        {
+          "id": "P2.5",
+          "title": "Tool: import_statement (parse, dedupe, insert, auto-categorize) with dry run",
+          "status": "todo"
+        },
+        {
+          "id": "P2.6",
+          "title": "Synthetic fixtures (statement PDF, receipt image, SMS dump) and parser tests",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "Agent layer",
+      "goal": "An MCP client that connects to FinMCP, holds conversation state, and lets Claude decide which tools to call.",
+      "weight": 3,
+      "tasks": [
+        {
+          "id": "P3.1",
+          "title": "MCP connection wrapper: stdio or HTTP, tool discovery, resource reads",
+          "status": "todo"
+        },
+        {
+          "id": "P3.2",
+          "title": "Claude agent loop over MCP tools with conversation memory",
+          "status": "todo"
+        },
+        {
+          "id": "P3.3",
+          "title": "System prompt grounded in schema and taxonomy (no hallucinated columns)",
+          "status": "todo"
+        },
+        {
+          "id": "P3.4",
+          "title": "Streaming event protocol: text deltas and tool-call trace for the UI",
+          "status": "todo"
+        },
+        {
+          "id": "P3.5",
+          "title": "Terminal chat REPL",
+          "status": "todo"
+        },
+        {
+          "id": "P3.6",
+          "title": "Agent tests with a scripted fake model driver",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "id": "P4",
+      "name": "Frontend",
+      "goal": "FastAPI wraps the agent; a React app gives chat, upload, dashboard and an editable transaction table.",
+      "weight": 4,
+      "tasks": [
+        {
+          "id": "P4.1",
+          "title": "FastAPI backend: chat (SSE), upload, transactions, summary, categories, alerts",
+          "status": "todo"
+        },
+        {
+          "id": "P4.2",
+          "title": "React + Vite + TypeScript scaffold with design tokens and typography",
+          "status": "todo"
+        },
+        {
+          "id": "P4.3",
+          "title": "Chat screen with live tool-call trace",
+          "status": "todo"
+        },
+        {
+          "id": "P4.4",
+          "title": "Upload screen: drag and drop, parse preview, confirm import",
+          "status": "todo"
+        },
+        {
+          "id": "P4.5",
+          "title": "Dashboard: category breakdown, monthly trend, budget meters (recharts)",
+          "status": "todo"
+        },
+        {
+          "id": "P4.6",
+          "title": "Transactions table with inline category edits feeding merchant memory",
+          "status": "todo"
+        },
+        {
+          "id": "P4.7",
+          "title": "Production build and end-to-end smoke test",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "id": "P5",
+      "name": "Polish & differentiators",
+      "goal": "Proactive budget alerts, confidence-scored categorization with a review queue, and a reusable server anyone can plug into any MCP client.",
+      "weight": 2,
+      "tasks": [
+        {
+          "id": "P5.1",
+          "title": "Budget alerts: check_budget_alerts tool, alerts resource, agent-initiated nudges",
+          "status": "todo"
+        },
+        {
+          "id": "P5.2",
+          "title": "Confidence scoring, needs-review queue, feedback learning loop",
+          "status": "todo"
+        },
+        {
+          "id": "P5.3",
+          "title": "Reusable server docs: README for any MCP client, server manifest",
+          "status": "todo"
+        },
+        {
+          "id": "P5.4",
+          "title": "Final QA: full test run, lint, end-to-end script, dashboard hand-off",
+          "status": "todo"
+        }
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "id": "R1",
+      "level": "warning",
+      "title": "No ANTHROPIC_API_KEY in the shell",
+      "detail": "LLM-backed tools (categorize, text-to-SQL, vision OCR, agent) run in deterministic fallback mode until a key is set in .env. Everything else works offline."
+    },
+    {
+      "id": "R2",
+      "level": "info",
+      "title": "mcp SDK 2.x API",
+      "detail": "FastMCP was renamed to MCPServer in mcp 2.0. Server code targets the 2.x API and pins mcp>=2.2."
+    },
+    {
+      "id": "R3",
+      "level": "info",
+      "title": "Claude Desktop config",
+      "detail": "The milestone installer writes to claude_desktop_config.json only when you run it. It is not touched automatically."
+    }
+  ],
+  "log": [
+    {
+      "ts": "2026-09-17T17:25:00+05:30",
+      "phase": "P0",
+      "task": "P0.1",
+      "event": "start",
+      "note": "Session opened; empty repo."
+    },
+    {
+      "ts": "2026-09-17T17:27:00+05:30",
+      "phase": "P0",
+      "task": "P0.1",
+      "event": "done",
+      "note": "Python 3.13.7, Node 22.19, Tesseract, SQLite found. venv created; mcp 2.2.0, anthropic 1.6.0, fastapi, pdfplumber, pytesseract installed."
+    },
+    {
+      "ts": "2026-09-17T17:31:00+05:30",
+      "phase": "P0",
+      "task": "P0.2",
+      "event": "done",
+      "note": "Six phases, 40 tasks, weights per phase."
+    },
+    {
+      "ts": "2026-09-17T17:32:00+05:30",
+      "phase": "P0",
+      "task": "P0.3",
+      "event": "start",
+      "note": "Building generator and dashboard page."
+    },
+    {
+      "ts": "2026-09-17T17:40:10+05:30",
+      "phase": "P0",
+      "task": "P0.3",
+      "event": "done",
+      "note": "Generator scans LOC, tests, MCP surface, DB, toolchain; page renders hero, rail, KPIs, roadmap, burn-up, LOC, tests, architecture map, log."
+    },
+    {
+      "ts": "2026-09-17T17:40:10+05:30",
+      "phase": "P0",
+      "task": "P0.4",
+      "event": "done",
+      "note": "pyproject, .gitignore, .env.example, README skeleton, git init."
+    }
+  ]
+}
