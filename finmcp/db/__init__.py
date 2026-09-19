@@ -18,7 +18,9 @@ def database_for(settings: Settings, *, migrate: bool = True) -> Database:
         cluster = dev_cluster(Path(ROOT), port=settings.pg_port)
         cluster.start()
         url = cluster.url
-    return open_database(url, migrate=migrate)
+    # A hosted database is a long round trip away: keep connections warm and allow parallel requests. Opening one
+    # (TCP, TLS, auth) costs several round trips, which is what a cold pool makes every first request pay.
+    return open_database(url, migrate=migrate, min_size=6, max_size=24) if settings.database_url else open_database(url, migrate=migrate)
 
 
 __all__ = ["Category", "Database", "Goal", "LedgerEvents", "Repository", "Transaction", "database_for", "events",

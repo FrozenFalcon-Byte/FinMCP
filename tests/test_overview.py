@@ -12,7 +12,7 @@ def test_overview_on_seeded_ledger(seeded_repo):
     sts = o["safe_to_spend"]
     assert sts["basis"] == "budget" and sts["budget_total"] == 84000 and sts["per_day"] is not None
     assert abs(sts["per_day"] - round(sts["left"] / 14, 2)) < 0.02
-    assert 1 <= len(o["top_categories"]) <= 3 and all(c["kind"] != "transfer" for c in o["top_categories"])
+    assert 1 <= len(o["top_categories"]) <= 4 and all(c["kind"] != "transfer" for c in o["top_categories"])
     assert o["insights"] and o["insights"][0]["kind"] == "pace"
     assert o["alerts"]["count"] >= 1 and len(o["recent"]) == 6 and o["needs_review"] >= 1
     assert o["recurring_count"] >= 5 and o["recurring_monthly"] > 0

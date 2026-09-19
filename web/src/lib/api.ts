@@ -1,5 +1,6 @@
 /* API client. Every request carries the session's bearer token (Supabase access token, local session JWT, or a
    personal MCP token). A 401 raises the app-wide `finmcp:unauthorized` event so the auth layer can react. */
+import { track } from "./loading";
 import type { ChatEvent } from "./types";
 
 export class ApiError extends Error {
@@ -35,6 +36,9 @@ function qs(params?: Params): string {
   return s ? `?${s}` : "";
 }
 
+/** Every request goes through here, so the page curtain knows when a screen has finished loading. */
+const tracked = (url: string, init?: RequestInit) => track(fetch(url, init));
+
 async function handle<T>(res: Response): Promise<T> {
   if (res.ok) return (await res.json()) as T;
   if (res.status === 401 && !res.url.includes("/api/auth/")) window.dispatchEvent(new Event("finmcp:unauthorized"));
@@ -51,16 +55,16 @@ async function handle<T>(res: Response): Promise<T> {
 const json = () => ({ "Content-Type": "application/json", ...authHeaders() });
 
 export const api = {
-  get: <T>(path: string, params?: Params) => fetch(`/api${path}${qs(params)}`, { headers: authHeaders() }).then((r) => handle<T>(r)),
+  get: <T>(path: string, params?: Params) => tracked(`/api${path}${qs(params)}`, { headers: authHeaders() }).then((r) => handle<T>(r)),
   post: <T>(path: string, body?: unknown, params?: Params) =>
-    fetch(`/api${path}${qs(params)}`, { method: "POST", headers: json(), body: body === undefined ? undefined : JSON.stringify(body) }).then((r) => handle<T>(r)),
-  patch: <T>(path: string, body: unknown) => fetch(`/api${path}`, { method: "PATCH", headers: json(), body: JSON.stringify(body) }).then((r) => handle<T>(r)),
-  put: <T>(path: string, body: unknown) => fetch(`/api${path}`, { method: "PUT", headers: json(), body: JSON.stringify(body) }).then((r) => handle<T>(r)),
-  del: <T>(path: string) => fetch(`/api${path}`, { method: "DELETE", headers: authHeaders() }).then((r) => handle<T>(r)),
-  upload: <T>(path: string, form: FormData) => fetch(`/api${path}`, { method: "POST", body: form, headers: authHeaders() }).then((r) => handle<T>(r)),
+    tracked(`/api${path}${qs(params)}`, { method: "POST", headers: json(), body: body === undefined ? undefined : JSON.stringify(body) }).then((r) => handle<T>(r)),
+  patch: <T>(path: string, body: unknown) => tracked(`/api${path}`, { method: "PATCH", headers: json(), body: JSON.stringify(body) }).then((r) => handle<T>(r)),
+  put: <T>(path: string, body: unknown) => tracked(`/api${path}`, { method: "PUT", headers: json(), body: JSON.stringify(body) }).then((r) => handle<T>(r)),
+  del: <T>(path: string) => tracked(`/api${path}`, { method: "DELETE", headers: authHeaders() }).then((r) => handle<T>(r)),
+  upload: <T>(path: string, form: FormData) => tracked(`/api${path}`, { method: "POST", body: form, headers: authHeaders() }).then((r) => handle<T>(r)),
   /** Fetch a file (CSV export) and hand it to the browser as a download. */
   download: async (path: string, filename: string) => {
-    const res = await fetch(`/api${path}`, { headers: authHeaders() });
+    const res = await tracked(`/api${path}`, { headers: authHeaders() });
     if (!res.ok) await handle(res);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);

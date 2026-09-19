@@ -7,7 +7,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from ..deps import AppContext, call_tool, get_ctx
+from ..deps import AppContext, call_tool, get_ctx, read_resource
 
 router = APIRouter(tags=["imports"])
 MAX_UPLOAD = 25 * 1024 * 1024
@@ -67,4 +67,4 @@ async def import_text(body: TextImport, ctx: AppContext = Depends(get_ctx)) -> A
 
 @router.get("/imports")
 async def recent_imports(ctx: AppContext = Depends(get_ctx)) -> Any:
-    return await ctx.connection.read_resource_json("finmcp://imports/recent")
+    return await read_resource(ctx, "finmcp://imports/recent")

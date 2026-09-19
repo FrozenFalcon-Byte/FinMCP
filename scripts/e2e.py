@@ -31,7 +31,7 @@ os.environ.update({
     "FINMCP_DATABASE_URL": CLUSTER.url, "FINMCP_DATA_DIR": str(_TMP / "data"), "FINMCP_LLM": "rules",
     "FINMCP_AGENT_DRIVER": "local", "FINMCP_JWT_SECRET": "e2e-secret-not-for-production-0123456789",
 })
-for var in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_DB_URL", "ANTHROPIC_API_KEY"):
+for var in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_DB_URL", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"):
     os.environ.pop(var, None)
 
 PY = ROOT / ".venv" / "bin" / "python"

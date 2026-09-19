@@ -1,4 +1,4 @@
-.PHONY: setup dev api web build test lint e2e pg pg-stop migrate seed server agent fixtures
+.PHONY: account setup dev api web build test lint e2e pg pg-stop migrate seed server agent fixtures demo-account
 
 PY := .venv/bin/python
 
@@ -14,8 +14,14 @@ pg-stop:          ## stop the embedded local PostgreSQL
 migrate:          ## apply supabase/migrations to the configured database (Supabase or local)
 	$(PY) scripts/migrate.py
 
+account:          ## create or update your own confirmed account (sets the password): ARGS="--email ... --password ... --empty"
+	$(PY) scripts/demo_account.py --name "$${NAME:-FinMCP user}" $(ARGS)
+
+demo-account:     ## create/refresh demo@finmcp.dev with 180 days of data; prints the password (ARGS="--password ...")
+	$(PY) scripts/demo_account.py $(ARGS)
+
 api:              ## FastAPI backend + remote MCP endpoint on :8000 (serves web/dist when built)
-	$(PY) -m uvicorn api.main:app --port 8000
+	$(PY) -m uvicorn api.main:app --port 8000 --reload --reload-include .env
 
 web:              ## Vite dev server on :5173 (proxies /api and /mcp to :8000)
 	cd web && npm run dev

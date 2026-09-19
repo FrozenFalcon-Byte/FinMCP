@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import random
 from datetime import date, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 from ..taxonomy import seed_categories
@@ -68,10 +69,17 @@ def _fmt(template: str, d: date, rng: random.Random) -> str:
     return template.format(ref=f"{rng.randrange(10**11, 10**12)}", mon=MONTHS[d.month - 1], yy=str(d.year)[2:])
 
 
+class _NoMemory:
+    """Stands in for the repository when categorising seed rows in memory: no merchant memory to recall."""
+
+    def recall_merchant(self, key: str) -> None:
+        return None
+
+
 def seed_demo_data(repo: Repository, *, days: int = 90, end: date | None = None, rng_seed: int = 42, categorize: bool = True) -> dict[str, int]:
     """Populate categories and ~days of transactions. Idempotent thanks to fingerprints."""
     from ..llm.provider import RuleBasedProvider
-    from ..services.categorize import Categorizer  # local import: avoids a cycle at import time
+    from ..services.categorize import NEEDS_REVIEW_BELOW, Categorizer  # local import: avoids a cycle at import time
 
     seed_categories(repo)
     rng = random.Random(rng_seed)
@@ -106,29 +114,26 @@ def seed_demo_data(repo: Repository, *, days: int = 90, end: date | None = None,
         if dd >= start:
             rows.append(dict(date=dd, merchant=merchant, description=_fmt(tpl, dd, rng), amount=float(amount), direction=direction))
 
-    inserted = 0
-    duplicates = 0
-    new_ids: list[int] = []
+    # Categorise in memory with the same rules the categorizer uses (a fresh account has no merchant memory yet), then
+    # insert everything in one pipelined batch: seeding a hosted database row by row is far too slow.
+    by_name = {c.name: c.id for c in repo.list_categories()}
+    rules = Categorizer(_NoMemory(), RuleBasedProvider(), actor="seed")  # type: ignore[arg-type]
+    batch: list[dict[str, Any]] = []
+    categorized = 0
     for r in sorted(rows, key=lambda x: x["date"]):
         iso = r["date"].isoformat()
         raw = f"{iso} {r['description']} {'CR' if r['direction'] == 'credit' else 'DR'} {r['amount']:.2f}"
-        tx = repo.insert_transaction(
-            date=iso, amount=r["amount"], merchant=r["merchant"], direction=r["direction"], description=r["description"],
-            source="seed", raw_text=raw, fingerprint=fingerprint_for(iso, r["amount"], r["direction"], r["merchant"], raw),
-            ignore_duplicate=True,
-        )
-        if tx is None:
-            duplicates += 1
-        else:
-            inserted += 1
-            new_ids.append(tx.id)
-
-    categorized = 0
-    if categorize and new_ids:
-        cat = Categorizer(repo, RuleBasedProvider(), actor="seed")
-        for tx_id in new_ids:
-            result = cat.categorize(tx_id)
-            if result["category"]:
-                categorized += 1
+        item: dict[str, Any] = dict(date=iso, amount=r["amount"], merchant=r["merchant"], direction=r["direction"], description=r["description"],
+                                    source="seed", raw_text=raw, fingerprint=fingerprint_for(iso, r["amount"], r["direction"], r["merchant"], raw))
+        if categorize:
+            g = rules.guess(SimpleNamespace(merchant=r["merchant"], description=r["description"], direction=r["direction"], amount=r["amount"]))  # type: ignore[arg-type]
+            cat_id = by_name.get(g.category) if g.category else None
+            item.update(category_id=cat_id, category_confidence=round(g.confidence, 3) if cat_id else None,
+                        category_source=g.source if cat_id else None, needs_review=cat_id is None or g.confidence < NEEDS_REVIEW_BELOW)
+            categorized += cat_id is not None
+        batch.append(item)
+    inserted = repo.insert_many(batch)
+    duplicates = len(batch) - inserted
+    categorized = categorized if inserted == len(batch) else min(categorized, inserted)
     repo.audit("seed", "seed_demo_data", detail={"inserted": inserted, "duplicates": duplicates, "categorized": categorized})
     return {"inserted": inserted, "duplicates": duplicates, "categorized": categorized, "categories": len(repo.list_categories())}

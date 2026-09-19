@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import calendar
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from typing import Any
 
@@ -23,15 +24,24 @@ def get_overview(repo: Repository, today: date | None = None, *, currency: str =
     days_in_month = calendar.monthrange(today.year, today.month)[1]
     days_left = max(0, (month_end - today).days)
 
-    this = get_summary(repo, "this month", "category", top=6, today=today)
     prev_s, prev_e = _same_window_last_month(today)
-    prev = get_summary(repo, f"{prev_s}..{prev_e}", "category", top=50, today=today)
-    budget = get_budget_summary(repo, None, today=today)
-    alerts = check_budget_alerts(repo, None, today=today)
-    recurring = list_recurring(repo, today)
-    recent, _ = repo.list_transactions(limit=6)
-    goals = repo.list_goals()
-    _, review = repo.list_transactions(needs_review_only=True, limit=1)
+    # The reads are independent, so they run side by side, each in its own short transaction: against a database
+    # that is a long round trip away this is the difference between seconds and tens of seconds.
+    with ThreadPoolExecutor(max_workers=10, thread_name_prefix="overview") as pool:
+        f_this = pool.submit(get_summary, repo, "this month", "category", top=6, today=today)
+        f_prev = pool.submit(get_summary, repo, f"{prev_s}..{prev_e}", "category", top=50, today=today)
+        f_budget = pool.submit(get_budget_summary, repo, None, today=today)
+        f_alerts = pool.submit(check_budget_alerts, repo, None, today=today)
+        f_recurring = pool.submit(list_recurring, repo, today)
+        f_recent = pool.submit(repo.list_transactions, limit=6)
+        f_goals = pool.submit(repo.list_goals)
+        f_review = pool.submit(repo.list_transactions, needs_review_only=True, limit=1)
+        f_three = pool.submit(get_summary, repo, "last 3 months", "category", top=1, today=today)
+        f_largest = pool.submit(repo.list_transactions, start=month_start.isoformat(), end=today.isoformat(), direction="debit",
+                                order="amount_desc", limit=1)
+        this, prev, budget, alerts = f_this.result(), f_prev.result(), f_budget.result(), f_alerts.result()
+        recurring, (recent, _), goals, (_, review) = f_recurring.result(), f_recent.result(), f_goals.result(), f_review.result()
+        three, (largest_rows, _) = f_three.result(), f_largest.result()
 
     spent = this["totals"]["spent"]
     prev_spent = prev["totals"]["spent"]
@@ -43,7 +53,6 @@ def get_overview(repo: Repository, today: date | None = None, *, currency: str =
         left = budget["totals"]["remaining"]
         basis = "budget"
     else:
-        three = get_summary(repo, "last 3 months", "category", top=1, today=today)
         baseline = three["totals"]["spent"] / 3 if three["totals"]["spent"] else 0.0
         left = baseline - spent
         basis = "average" if baseline else "none"
@@ -58,8 +67,7 @@ def get_overview(repo: Repository, today: date | None = None, *, currency: str =
         before = prev_by_cat.get(b["category"], 0.0)
         movers.append({"category": b["category"], "spent": b["spent"], "before": before, "delta": _round(b["spent"] - before)})
     movers.sort(key=lambda m: -abs(m["delta"]))
-    top_categories = [b for b in this["breakdown"] if b.get("kind") != "transfer"][:3]
-    largest_rows, _ = repo.list_transactions(start=month_start.isoformat(), end=today.isoformat(), direction="debit", order="amount_desc", limit=1)
+    top_categories = [b for b in this["breakdown"] if b.get("kind") != "transfer"][:4]
     largest = largest_rows[0] if largest_rows else None
 
     insights: list[dict[str, Any]] = []

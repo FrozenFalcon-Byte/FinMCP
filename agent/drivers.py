@@ -146,7 +146,7 @@ class LocalDriver:
     """Deterministic stand-in when no model is configured. One tool call per question, then a rendered answer."""
 
     name = "local"
-    NOTICE = "(No ANTHROPIC_API_KEY set, so this answer comes from FinMCP's built-in query engine, not a language model.)\n\n"
+    NOTICE = "(No OPENROUTER_API_KEY set, so this answer comes from FinMCP's built-in query engine, not a language model.)\n\n"
 
     def __init__(self) -> None:
         self._ids = itertools.count(1)
@@ -241,10 +241,78 @@ class ScriptedDriver:
         yield {"type": "final", "final": DriverFinal(content=blocks, stop_reason=stop, usage={"input_tokens": 1, "output_tokens": 1})}
 
 
+class OpenRouterDriver:
+    """Any OpenRouter model, streamed, with tool calls translated to and from the Anthropic shape the agent keeps."""
+
+    name = "openrouter"
+
+    def __init__(self, model: str, *, max_tokens: int = 8000, timeout: float = 300.0):
+        self.model = model
+        self.max_tokens = max_tokens
+        self.timeout = timeout
+
+    async def stream(self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[dict[str, Any]]:
+        import httpx
+
+        from finmcp.llm import openrouter
+
+        body: dict[str, Any] = {"model": self.model, "max_tokens": self.max_tokens, "stream": True,
+                                "messages": openrouter.to_messages(system, messages)}
+        if tools:
+            body["tools"] = openrouter.to_tools(tools)
+        text, calls, finish, usage, model = "", {}, None, None, None
+        try:
+            hdrs = openrouter.headers()
+        except PermissionError as exc:
+            raise DriverError(str(exc)) from exc
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout, connect=15.0)) as http, \
+                    http.stream("POST", openrouter.URL, json=body, headers=hdrs) as r:
+                if r.status_code >= 400:
+                    raise DriverError(openrouter.status_message(r.status_code, (await r.aread()).decode(errors="replace")))
+                async for line in r.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue  # blank lines and ": OPENROUTER PROCESSING" keep-alives
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    chunk = json.loads(data)
+                    if chunk.get("error"):
+                        raise DriverError(openrouter.status_message(int(chunk["error"].get("code") or 500), json.dumps(chunk)))
+                    model = chunk.get("model") or model
+                    usage = chunk.get("usage") or usage
+                    for choice in chunk.get("choices") or []:
+                        delta = choice.get("delta") or {}
+                        if delta.get("content"):
+                            text += delta["content"]
+                            yield {"type": "text_delta", "text": delta["content"]}
+                        for tc in delta.get("tool_calls") or []:
+                            slot = calls.setdefault(tc.get("index", 0), {"id": None, "name": "", "args": ""})
+                            fn = tc.get("function") or {}
+                            slot["id"] = slot["id"] or tc.get("id")
+                            slot["name"] = slot["name"] or fn.get("name") or ""
+                            slot["args"] += fn.get("arguments") or ""
+                        finish = choice.get("finish_reason") or finish
+        except httpx.HTTPError as exc:
+            raise DriverError("Could not reach OpenRouter (network error).") from exc
+        content: list[dict[str, Any]] = [{"type": "text", "text": text}] if text else []
+        for i in sorted(calls):
+            c = calls[i]
+            try:
+                args = json.loads(c["args"] or "{}")
+            except ValueError:
+                args = {}
+            content.append({"type": "tool_use", "id": c["id"] or f"call_{i}", "name": c["name"], "input": args if isinstance(args, dict) else {}})
+        stop = "tool_use" if calls else ("max_tokens" if finish == "length" else "end_turn")
+        yield {"type": "final", "final": DriverFinal(content=content, stop_reason=stop, usage=usage, model=model)}
+
+
 def make_driver(kind: str = "auto", *, model: str = "claude-opus-5", effort: str = "medium", fallbacks: bool = True,
-                api_key_present: bool = False) -> ModelDriver:
+                backend: str = "none") -> ModelDriver:
     if kind == "auto":
-        kind = "anthropic" if api_key_present else "local"
+        kind = backend if backend in {"openrouter", "anthropic"} else "local"
+    if kind == "openrouter":
+        return OpenRouterDriver(model)
     if kind == "anthropic":
         return AnthropicDriver(model, effort=effort, fallbacks=fallbacks)
     if kind == "local":

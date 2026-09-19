@@ -50,14 +50,14 @@ def build_connection(args: argparse.Namespace, settings: Any) -> MCPConnection:
 async def chat(args: argparse.Namespace) -> int:
     settings = load_settings(llm_mode=args.llm, seed_if_empty=args.seed_if_empty)
     driver = make_driver(args.driver, model=args.model or settings.model, effort=args.effort, fallbacks=settings.fallbacks,
-                         api_key_present=settings.api_key_present)
+                         backend=settings.llm_backend)
     conn = build_connection(args, settings)
     async with conn:
         agent = Agent(conn, driver, currency=settings.currency, max_iterations=args.max_iterations)
         await agent.prepare()
         print(c("2", f"FinMCP agent · driver={driver.name} · server={conn.label} · {len(agent.tools)} tools · /tools /reset /quit"))
         if driver.name == "local":
-            print(c("33", "No ANTHROPIC_API_KEY set: answers come from FinMCP's built-in query engine. Add a key to .env for Claude."))
+            print(c("33", "No OPENROUTER_API_KEY set: answers come from FinMCP's built-in query engine. Add a key to .env for a real model."))
         conversation_id: str | None = None
         while True:
             try:
@@ -110,8 +110,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--url", help="streamable HTTP URL when --server http")
     ap.add_argument("--token", default=os.environ.get("FINMCP_MCP_TOKEN"), help="personal MCP token (fm_...) that picks the account")
     ap.add_argument("--user-email", default=os.environ.get("FINMCP_USER_EMAIL"), help="serve this account (local mode)")
-    ap.add_argument("--llm", choices=["auto", "anthropic", "rules"], default=None, help="server-side LLM mode")
-    ap.add_argument("--driver", choices=["auto", "anthropic", "local"], default="auto", help="agent model driver")
+    ap.add_argument("--llm", choices=["auto", "openrouter", "anthropic", "rules"], default=None, help="server-side LLM mode")
+    ap.add_argument("--driver", choices=["auto", "openrouter", "anthropic", "local"], default="auto", help="agent model driver")
     ap.add_argument("--model", default=None)
     ap.add_argument("--effort", default=os.environ.get("FINMCP_AGENT_EFFORT", "medium"), choices=["low", "medium", "high", "xhigh", "max"])
     ap.add_argument("--max-iterations", type=int, default=12)

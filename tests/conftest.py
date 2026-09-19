@@ -36,7 +36,7 @@ os.environ.update({
 })
 # Blank (not unset) so the developer's real .env, which load_dotenv never lets override the environment, stays out
 # of tests and of the stdio servers they spawn.
-for var in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_DB_URL", "SUPABASE_JWT_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "ANTHROPIC_API_KEY"):
+for var in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_DB_URL", "SUPABASE_JWT_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"):
     os.environ[var] = ""
 _DB = open_database(_CLUSTER.url)
 

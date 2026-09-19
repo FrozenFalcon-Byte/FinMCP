@@ -44,7 +44,7 @@ function Diagram({ pulses, overview }: { pulses: Pulse[]; overview: McpOverview 
       {Object.entries(PATHS).map(([k, d]) => <path key={k} d={d} className={`arch-edge ${k === "ext-srv" ? "dashed" : ""}`} markerEnd="url(#arr)" />)}
       <g className="arch-node"><rect x="20" y="150" width="130" height="80" rx="18" /><text x="85" y="186" textAnchor="middle" className="t">You</text><text x="85" y="206" textAnchor="middle" className="s">screens · Ask</text></g>
       <g className="arch-node client"><rect x="268" y="84" width="160" height="68" rx="16" /><text x="348" y="113" textAnchor="middle" className="t">finmcp-web</text><text x="348" y="133" textAnchor="middle" className="s">elicitation · roots{sampling ? " · sampling" : ""}</text></g>
-      <g className="arch-node client alt"><rect x="268" y="228" width="160" height="68" rx="16" /><text x="348" y="257" textAnchor="middle" className="t">finmcp-assistant</text><text x="348" y="277" textAnchor="middle" className="s">Claude tool loop</text></g>
+      <g className="arch-node client alt"><rect x="268" y="228" width="160" height="68" rx="16" /><text x="348" y="257" textAnchor="middle" className="t">finmcp-assistant</text><text x="348" y="277" textAnchor="middle" className="s">model tool loop</text></g>
       <g className="arch-node core"><rect x="548" y="120" width="164" height="118" rx="20" /><text x="630" y="152" textAnchor="middle" className="t">FinMCP server</text>
         <text x="630" y="176" textAnchor="middle" className="s">24 tools · 13 resources</text><text x="630" y="194" textAnchor="middle" className="s">4 prompts · completions</text><text x="630" y="212" textAnchor="middle" className="s">subscriptions/listen</text></g>
       <g className="arch-node"><rect x="770" y="158" width="96" height="64" rx="16" /><text x="818" y="186" textAnchor="middle" className="t">Postgres</text><text x="818" y="204" textAnchor="middle" className="s">row-level security</text></g>
@@ -133,7 +133,7 @@ function Playground({ schema }: { schema: McpSchema | null }) {
 
   if (!schema) return <Skeleton h={220} />;
   return (
-    <div className="card play">
+    <div className="card play" id="playground">
       <div className="card-head">
         <h3>Playground</h3>
         <div className="tabs">
@@ -208,6 +208,16 @@ export default function Mcp() {
     window.setTimeout(() => setPulses((ps) => ps.filter((p) => !fresh.includes(p))), 900);
   });
 
+  // Opened from a landing-page card (/app/mcp#sampling): bring that primitive into view and light it up once.
+  const ready = !!overview.data && !!schema.data;
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    const el = ready && id ? document.getElementById(id) : null;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("flash");
+  }, [ready]);
+
   const kinds = useMemo(() => Object.keys(KIND_LABEL).filter((k) => (stats?.by_kind[k] ?? 0) > 0), [stats]);
   const shown = filter === "all" ? entries : entries.filter((e) => e.kind === filter);
   const web = overview.data?.sessions[0];
@@ -258,7 +268,7 @@ export default function Mcp() {
 
       <div className="caps">
         {CAPS.map((c) => (
-          <div key={c.kind} className={`card cap ${offered(c.kind) ? "" : "off"}`}>
+          <div key={c.kind} id={c.kind} className={`card cap ${offered(c.kind) ? "" : "off"}`}>
             <div className="cap-head">
               <span className={`cap-dot k-${c.kind}`} />
               <h3>{c.title}</h3>

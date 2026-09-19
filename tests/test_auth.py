@@ -190,3 +190,24 @@ def test_delete_account(app_client: TestClient):
     r = c.delete("/api/auth/account", headers=h)
     assert r.status_code == 200 and r.json()["deleted"] and r.json()["rows"]["transactions"] > 100
     assert c.post("/api/auth/login", json={"email": f"gone-{tag}@example.com", "password": "plain words ledger"}).status_code == 401
+
+
+def test_password_reset_flow(app_client: TestClient, caplog):
+    import logging
+    import re
+
+    c = app_client
+    email = f"reset-{uuid.uuid4().hex[:6]}@example.com"
+    register(c, "Reset", email)
+    with caplog.at_level(logging.WARNING, logger="finmcp.api.auth"):
+        r = c.post("/api/auth/password/forgot", json={"email": email})
+        assert r.json() == {"sent": True} and "token" not in r.text
+        assert c.post("/api/auth/password/forgot", json={"email": "nobody@example.com"}).json() == {"sent": True}
+    token = re.search(r"reset-password\?token=(\S+)", caplog.text).group(1)
+    assert c.post("/api/auth/password/reset", json={"token": token, "password": "short"}).status_code == 400
+    r = c.post("/api/auth/password/reset", json={"token": token, "password": "a brand new passphrase"})
+    assert r.status_code == 200 and r.json()["user"]["email"] == email and r.json()["access_token"]
+    assert c.post("/api/auth/password/reset", json={"token": token, "password": "another new passphrase"}).status_code == 400  # single use
+    assert c.post("/api/auth/login", json={"email": email, "password": "plain words ledger"}).status_code == 401
+    assert c.post("/api/auth/login", json={"email": email, "password": "a brand new passphrase"}).status_code == 200
+    assert c.post("/api/auth/password/reset", json={"token": "x" * 40, "password": "a brand new passphrase"}).status_code == 400

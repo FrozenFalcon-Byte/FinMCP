@@ -138,8 +138,10 @@ def resolve_category_name(text: str) -> str | None:
 
 def seed_categories(repo: Repository) -> int:
     """Create the default categories if they don't exist. Returns how many exist afterwards."""
+    existing = {c.name.lower() for c in repo.list_categories()}
     for spec in DEFAULT_CATEGORIES:
-        repo.upsert_category(spec.name, spec.kind, spec.budget_limit, spec.description)
+        if spec.name.lower() not in existing:  # never touch a category (or budget) the person already has
+            repo.upsert_category(spec.name, spec.kind, spec.budget_limit, spec.description)
     return len(repo.list_categories())
 
 

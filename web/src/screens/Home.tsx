@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { motion } from "motion/react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Avatar, Bar, Chip, Empty, ErrorBox, Icon, Ring, Skeleton, Sparkline, Stat } from "../components/ui";
+import { Avatar, Chip, Empty, ErrorBox, Icon, Ring, Skeleton, Sparkline, Stat } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { compact, dayLabel, greeting, money, monthLabel } from "../lib/format";
@@ -92,13 +93,8 @@ export default function Home() {
       <div className="grid two">
         <section className="card">
           <div className="card-head"><h2>Where it went</h2><Link to="/app/budgets" className="card-link">Budgets <Icon name="arrowRight" /></Link></div>
-          {o ? (o.top_categories.length ? o.top_categories.map((c) => (
-            <div className="bud-row" key={c.category} role="button" tabIndex={0} style={{ cursor: "pointer" }} onClick={() => navigate(`/app/transactions?category=${encodeURIComponent(c.category ?? "")}&period=this%20month`)}>
-              <div className="n">{c.category}</div>
-              <div className="v num">{money(c.spent, currency)}{c.budget_limit ? ` of ${compact(c.budget_limit, currency)}` : c.share_pct != null ? ` · ${Math.round(c.share_pct)}%` : ""}</div>
-              <Bar pct={c.budget_limit ? (c.spent / c.budget_limit) * 100 : (c.share_pct ?? 0)} thin tone={c.budget_limit ? undefined : ""} />
-            </div>
-          )) : <Empty>Nothing spent yet this month.</Empty>) : <div className="stack"><Skeleton /><Skeleton /><Skeleton /></div>}
+          {o ? (o.spent > 0 ? <WhereItWent o={o} currency={currency} onPick={(c) => navigate(`/app/transactions?category=${encodeURIComponent(c)}&period=this%20month`)} />
+            : <Empty>Nothing spent yet this month.</Empty>) : <div className="stack"><Skeleton h={150} /><Skeleton /></div>}
         </section>
 
         <section className="card">
@@ -146,6 +142,69 @@ export default function Home() {
         ) : <Empty>Add your first expense in the bar above, or import a statement.</Empty>) : <div className="stack"><Skeleton /><Skeleton /><Skeleton /></div>}
       </section>
       {o ? <div className="small muted" style={{ textAlign: "center" }}>Previous month to date: {money(o.previous_spent, currency)} · {monthLabel(o.month.key, { month: "long", year: "numeric" })}</div> : null}
+    </div>
+  );
+}
+
+/* Where this month's money went: one ring, the four biggest categories and the rest, each labelled beside it.
+   Hovering a slice or a row shows its amount in the middle; a row opens those transactions. */
+const SLICE_COLORS = ["#4d43fe", "#0f9488", "#d9892b", "#d6455d"];
+const REST_COLOR = "#c9ccd8";
+
+function WhereItWent({ o, currency, onPick }: { o: Overview; currency: string; onPick: (category: string) => void }) {
+  const [hot, setHot] = useState<number | null>(null);
+  const top = o.top_categories.slice(0, 4);
+  const rest = Math.max(0, o.spent - top.reduce((a, c) => a + c.spent, 0));
+  const parts = [
+    ...top.map((c, i) => ({ name: c.category ?? "Uncategorized", value: c.spent, color: SLICE_COLORS[i], limit: c.budget_limit ?? null, pick: c.category ?? "" })),
+    ...(rest >= 1 ? [{ name: "Everything else", value: rest, color: REST_COLOR, limit: null, pick: null }] : []),
+  ];
+  const total = parts.reduce((a, p) => a + p.value, 0) || 1;
+  const R = 62;
+  const C = 2 * Math.PI * R;
+  const GAP = parts.length > 1 ? 3 : 0;
+  let at = 0;
+  const focus = hot !== null ? parts[hot] : null;
+  return (
+    <div className="where">
+      <div className="donut-wrap">
+        <svg viewBox="0 0 160 160" className="donut" role="img" aria-label={`Spent ${money(o.spent, currency)} this month`}>
+          <circle cx="80" cy="80" r={R} className="donut-track" />
+          <g transform="rotate(-90 80 80)">
+            {parts.map((p, i) => {
+              const len = (p.value / total) * C;
+              const offset = -at;
+              at += len;
+              return (
+                <motion.circle key={p.name} cx="80" cy="80" r={R} fill="none" stroke={p.color} strokeLinecap="butt"
+                  initial={{ strokeDasharray: `0 ${C}` }} animate={{ strokeDasharray: `${Math.max(0.1, len - GAP)} ${C}`, strokeWidth: hot === i ? 22 : 16, opacity: hot === null || hot === i ? 1 : 0.35 }}
+                  transition={{ duration: 0.7, delay: 0.08 * i, ease: [0.22, 1, 0.36, 1] }} strokeDashoffset={offset}
+                  onMouseEnter={() => setHot(i)} onMouseLeave={() => setHot(null)} style={{ cursor: p.pick !== null ? "pointer" : "default" }}
+                  onClick={() => { if (p.pick !== null) onPick(p.pick); }} />
+              );
+            })}
+          </g>
+        </svg>
+        <div className="donut-c">
+          <b className="num">{money(focus ? focus.value : o.spent, currency)}</b>
+          <span>{focus ? focus.name : "spent this month"}</span>
+        </div>
+      </div>
+      <div className="where-list">
+        {parts.map((p, i) => {
+          const over = p.limit ? p.value - p.limit : 0;
+          return (
+            <button type="button" key={p.name} className={`where-row ${hot === i ? "hot" : ""}`} disabled={p.pick === null}
+              onMouseEnter={() => setHot(i)} onMouseLeave={() => setHot(null)} onFocus={() => setHot(i)} onBlur={() => setHot(null)}
+              onClick={() => { if (p.pick !== null) onPick(p.pick); }}>
+              <span className="dot" style={{ background: p.color }} />
+              <span className="n">{p.name}{over > 0 ? <em>{money(over, currency)} over budget</em> : null}</span>
+              <span className="pct">{Math.round((p.value / total) * 100)}%</span>
+              <span className="v num">{money(p.value, currency)}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

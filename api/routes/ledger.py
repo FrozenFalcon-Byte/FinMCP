@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from ..deps import AppContext, call_tool, get_ctx
+from ..deps import AppContext, call_tool, get_ctx, read_resource
 
 router = APIRouter(tags=["ledger"])
 
@@ -113,7 +113,7 @@ async def export_csv(period: str | None = None, ctx: AppContext = Depends(get_ct
 
 @router.get("/status")
 async def status(ctx: AppContext = Depends(get_ctx)) -> Any:
-    return await ctx.connection.read_resource_json("finmcp://status")
+    return await read_resource(ctx, "finmcp://status")
 
 
 @router.get("/transactions")
@@ -180,7 +180,7 @@ async def categorize_uncategorized(limit: int = Query(25, ge=1, le=200), ctx: Ap
 
 @router.get("/categories")
 async def categories(ctx: AppContext = Depends(get_ctx)) -> Any:
-    return await ctx.connection.read_resource_json("finmcp://categories")
+    return await read_resource(ctx, "finmcp://categories")
 
 
 class BudgetBody(BaseModel):

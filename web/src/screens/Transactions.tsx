@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { Avatar, Chip, Empty, ErrorBox, Icon, PageHead, Sheet, Skeleton, Spinner } from "../components/ui";
+import { isFresh, peek, put } from "../lib/cache";
 import { api } from "../lib/api";
 import { dayLabel, money } from "../lib/format";
 import { useLedger } from "../lib/ledger";
@@ -44,15 +45,29 @@ export default function Transactions() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
-  useEffect(() => { api.get<Category[]>("/categories").then(setCats).catch(() => undefined); }, [version]);
+  useEffect(() => {
+    const cached = peek<Category[]>("categories");
+    if (cached) setCats(cached);
+    if (isFresh("categories")) return;
+    const started = Date.now();
+    api.get<Category[]>("/categories").then((c) => { put("categories", c, started); setCats(c); }).catch(() => undefined);
+  }, [version]);
 
   const load = useCallback(async (offset = 0) => {
-    setLoading(true);
+    const query = {
+      period: period === "all time" ? undefined : period, category: category || undefined, search: search || undefined,
+      direction: direction || undefined, needs_review_only: review || undefined, limit: PAGE, offset,
+    };
+    // The first page of each filter combination is cached in the browser: coming back paints it instantly.
+    const key = offset ? null : "transactions" + JSON.stringify(query);
+    const cached = key ? peek<TransactionPage>(key) : undefined;
+    if (cached) { setRows(cached.transactions); setTotal(cached.total); setError(null); }
+    if (key && isFresh(key)) { setLoading(false); return; }
+    setLoading(!cached);
+    const started = Date.now();
     try {
-      const page = await api.get<TransactionPage>("/transactions", {
-        period: period === "all time" ? undefined : period, category: category || undefined, search: search || undefined,
-        direction: direction || undefined, needs_review_only: review || undefined, limit: PAGE, offset,
-      });
+      const page = await api.get<TransactionPage>("/transactions", query);
+      if (key) put(key, page, started);
       setRows((prev) => (offset ? [...prev, ...page.transactions] : page.transactions));
       setTotal(page.total);
       setError(null);

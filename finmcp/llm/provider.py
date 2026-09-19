@@ -9,6 +9,7 @@ import re
 from datetime import date
 from typing import Any, Literal, Protocol, runtime_checkable
 
+import httpx
 from pydantic import BaseModel, Field, ValidationError
 
 from ..config import Settings
@@ -210,7 +211,27 @@ class AnthropicProvider:
         return out.transactions
 
 
+class OpenRouterProvider(AnthropicProvider):
+    """The same prompts and output models as AnthropicProvider, answered by any OpenRouter model as plain JSON."""
+
+    name = "openrouter"
+
+    def _parse(self, *, system: str, user: str | list[dict[str, Any]], output_format: type[BaseModel], effort: str, max_tokens: int = 4096) -> BaseModel:
+        from . import openrouter
+
+        try:
+            return openrouter.complete_json(model=self.model, system=system, user=user, output=output_format, max_tokens=max_tokens, timeout=self.timeout)
+        except PermissionError as exc:
+            raise LLMError(str(exc)) from exc
+        except httpx.HTTPError as exc:
+            raise LLMError("Could not reach OpenRouter (network error).") from exc
+        except (RuntimeError, ValueError) as exc:
+            raise LLMError(str(exc)) from exc
+
+
 def get_provider(settings: Settings) -> LLMProvider:
+    if settings.use_llm and settings.llm_backend == "openrouter":
+        return OpenRouterProvider(settings.model, fallbacks=False)
     if settings.use_llm:
         if not settings.api_key_present and settings.llm_mode == "anthropic":
             log.warning("FINMCP_LLM=anthropic but no ANTHROPIC_API_KEY is set; calls will fail until it is.")
@@ -218,7 +239,7 @@ def get_provider(settings: Settings) -> LLMProvider:
     return RuleBasedProvider()
 
 
-__all__ = ["AnthropicProvider", "CategoryGuess", "ExtractedTransaction", "LLMError", "LLMProvider", "ReceiptExtraction", "RuleBasedProvider", "SQLGuess", "UnsupportedQuestion", "get_provider"]
+__all__ = ["AnthropicProvider", "OpenRouterProvider", "CategoryGuess", "ExtractedTransaction", "LLMError", "LLMProvider", "ReceiptExtraction", "RuleBasedProvider", "SQLGuess", "UnsupportedQuestion", "get_provider"]
 
 
 SAMPLING_SYSTEM = ("You categorise personal-finance transactions. Pick exactly one category name from the list for each "

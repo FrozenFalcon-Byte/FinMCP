@@ -102,7 +102,7 @@ class ElicitationBroker:
 def sampling_callback(driver: ModelDriver) -> Callable[..., Awaitable[Any]] | None:
     """The client-side half of sampling. Only offered when the app has a real model; otherwise the server sees no
     sampling capability and falls back to its own rules."""
-    if getattr(driver, "name", "") != "anthropic":
+    if getattr(driver, "name", "") not in {"anthropic", "openrouter"}:
         return None
 
     async def handler(context: Any, params: mt.CreateMessageRequestParams) -> Any:

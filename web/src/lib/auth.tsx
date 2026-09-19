@@ -1,9 +1,12 @@
 /* Sign-in state for the whole app. Two identity providers behind one interface:
    - Supabase Auth (email/password + OAuth) when the API says it is configured; tokens come from supabase-js.
-   - The API's own local accounts otherwise; the session JWT is kept in localStorage. */
+   - The API's own local accounts otherwise.
+   Either way the session lives in first-party cookies (see cookies.ts) and signing out clears them. */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { clearCache } from "./cache";
 import { api, setAuthToken } from "./api";
+import { cookieStorage, getCookie, removeCookie, setCookie } from "./cookies";
 
 export interface AuthUser { id: string; email: string; name: string; currency: string; created_at: string }
 export interface AuthConfig {
@@ -28,10 +31,13 @@ interface AuthValue {
   register: (input: RegisterInput) => Promise<RegisterResult>;
   loginWithProvider: (provider: string) => Promise<void>;
   logout: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  resetPassword: (password: string, token?: string | null) => Promise<AuthUser | null>;
   refreshUser: () => Promise<AuthUser | null>;
 }
 
 const LOCAL_KEY = "finmcp.session";
+const SUPABASE_KEY = "finmcp.auth";
 const PENDING_SEED = "finmcp.pendingSeed";
 
 const AuthContext = createContext<AuthValue>({
@@ -40,24 +46,33 @@ const AuthContext = createContext<AuthValue>({
   register: async () => { throw new Error("auth not ready"); },
   loginWithProvider: async () => { throw new Error("auth not ready"); },
   logout: async () => {},
+  requestPasswordReset: async () => {},
+  resetPassword: async () => null,
   refreshUser: async () => null,
 });
 
 function readLocal(): string | null {
   try {
-    const raw = localStorage.getItem(LOCAL_KEY);
+    const legacy = localStorage.getItem(LOCAL_KEY);  // sessions saved before cookies: move them over once
+    if (legacy) { localStorage.removeItem(LOCAL_KEY); setCookie(LOCAL_KEY, legacy); }
+  } catch { /* storage unavailable */ }
+  try {
+    const raw = getCookie(LOCAL_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { access_token: string; expires_at: number };
-    if (parsed.expires_at && parsed.expires_at < Date.now() / 1000) { localStorage.removeItem(LOCAL_KEY); return null; }
+    if (parsed.expires_at && parsed.expires_at < Date.now() / 1000) { removeCookie(LOCAL_KEY); return null; }
     return parsed.access_token;
   } catch { return null; }
 }
 
 function writeLocal(token: string | null, expiresIn = 30 * 24 * 3600): void {
-  try {
-    if (!token) localStorage.removeItem(LOCAL_KEY);
-    else localStorage.setItem(LOCAL_KEY, JSON.stringify({ access_token: token, expires_at: Math.floor(Date.now() / 1000) + expiresIn }));
-  } catch { /* storage unavailable */ }
+  if (!token) removeCookie(LOCAL_KEY);
+  else setCookie(LOCAL_KEY, JSON.stringify({ access_token: token, expires_at: Math.floor(Date.now() / 1000) + expiresIn }), expiresIn);
+}
+
+function clearSessionCookies(): void {
+  removeCookie(LOCAL_KEY);
+  removeCookie(SUPABASE_KEY);
 }
 
 async function seedIfPending(): Promise<void> {
@@ -103,12 +118,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setConfig(cfg);
       if (cfg?.mode === "supabase" && cfg.supabase_url && cfg.supabase_anon_key) {
         const { createClient } = await import("@supabase/supabase-js");
-        const client = createClient(cfg.supabase_url, cfg.supabase_anon_key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+        const client = createClient(cfg.supabase_url, cfg.supabase_anon_key, {
+          auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: cookieStorage, storageKey: SUPABASE_KEY },
+        });
         supabaseRef.current = client;
         setSupabase(client);
         const { data } = await client.auth.getSession();
         await loadUser(data.session?.access_token ?? null);
-        const { data: sub } = client.auth.onAuthStateChange((_event, session) => { void loadUser(session?.access_token ?? null); });
+        const { data: sub } = client.auth.onAuthStateChange((event, session) => {
+          void loadUser(session?.access_token ?? null);
+          // A recovery link that Supabase sent to its Site URL instead of ours still ends on the reset form.
+          if (event === "PASSWORD_RECOVERY" && window.location.pathname !== "/reset-password") window.location.replace("/reset-password");
+        });
         unsubscribe = () => sub.subscription.unsubscribe();
       } else {
         await loadUser(readLocal());
@@ -118,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const onUnauthorized = () => {
       const client = supabaseRef.current;
       if (client) void client.auth.getSession().then(({ data }) => { if (!data.session) void loadUser(null); });
-      else { writeLocal(null); void loadUser(null); }
+      else { clearSessionCookies(); void loadUser(null); }
     };
     window.addEventListener("finmcp:unauthorized", onUnauthorized);
     return () => { cancelled = true; unsubscribe?.(); window.removeEventListener("finmcp:unauthorized", onUnauthorized); };
@@ -167,15 +188,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try { await api.post("/auth/logout"); } catch { /* ignore */ }
     const client = supabaseRef.current;
-    if (client) await client.auth.signOut();
-    writeLocal(null);
+    if (client) {
+      // "local" scope ends this browser's session even when the network call to revoke the refresh token fails.
+      try { await client.auth.signOut({ scope: "local" }); } catch { /* cookies are cleared below regardless */ }
+    }
+    clearSessionCookies();
+    clearCache();
     await loadUser(null);
+  }, [loadUser]);
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const client = supabaseRef.current;
+    if (client) {
+      const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
+      if (error) throw new Error(error.message);
+      return;
+    }
+    await api.post("/auth/password/forgot", { email });
+  }, []);
+
+  const resetPassword = useCallback(async (password: string, resetToken?: string | null) => {
+    const client = supabaseRef.current;
+    if (client) {
+      const { data, error } = await client.auth.updateUser({ password });
+      if (error) throw new Error(error.message);
+      const { data: s2 } = await client.auth.getSession();
+      return data.user ? loadUser(s2.session?.access_token ?? null) : null;
+    }
+    if (!resetToken) throw new Error("This reset link is incomplete. Ask for a new one.");
+    const r = await api.post<{ access_token: string; expires_in: number; user: AuthUser }>("/auth/password/reset", { token: resetToken, password });
+    writeLocal(r.access_token, r.expires_in);
+    return loadUser(r.access_token);
   }, [loadUser]);
 
   const refreshUser = useCallback(() => loadUser(token), [loadUser, token]);
 
-  const value = useMemo<AuthValue>(() => ({ config, user, ready, token, supabase, login, register, loginWithProvider, logout, refreshUser }),
-    [config, user, ready, token, supabase, login, register, loginWithProvider, logout, refreshUser]);
+  const value = useMemo<AuthValue>(() => ({ config, user, ready, token, supabase, login, register, loginWithProvider, logout, requestPasswordReset, resetPassword, refreshUser }),
+    [config, user, ready, token, supabase, login, register, loginWithProvider, logout, requestPasswordReset, resetPassword, refreshUser]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

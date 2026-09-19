@@ -241,6 +241,28 @@ class Repository:
         self._emit("transaction", "insert", int(row["id"]))
         return tx
 
+    def insert_many(self, rows: list[dict[str, Any]]) -> int:
+        """Insert many transactions in one transaction, pipelined (seeding, large imports). Rows whose fingerprint
+        already exists are skipped. Returns how many were inserted."""
+        if not rows:
+            return 0
+        sql = """INSERT INTO transactions (user_id, date, amount, direction, currency, merchant, description, category_id,
+                   category_confidence, category_source, source, client, raw_text, fingerprint, needs_review)
+                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 ON CONFLICT (user_id, fingerprint) WHERE fingerprint IS NOT NULL DO NOTHING"""
+        params = [(self.user_id, r["date"], float(r["amount"]), r.get("direction", "debit"), r.get("currency", "INR"), str(r["merchant"]).strip(),
+                   r.get("description"), r.get("category_id"), r.get("category_confidence"), r.get("category_source"), r.get("source", "manual"),
+                   self.client, r.get("raw_text"), r.get("fingerprint"), bool(r.get("needs_review", False))) for r in rows]
+        count = "SELECT count(*) AS n FROM transactions WHERE user_id = %s"
+        with self.db.tenant(self.user_id) as conn:
+            before = int(conn.execute(count, (self.user_id,)).fetchone()["n"])  # type: ignore[index]
+            with conn.cursor() as cur:
+                cur.executemany(sql, params)  # psycopg pipelines executemany: a handful of round trips, not one per row
+            inserted = int(conn.execute(count, (self.user_id,)).fetchone()["n"]) - before  # type: ignore[index]
+        if inserted:
+            self._emit("ledger", "bulk_insert", None, count=inserted)
+        return inserted
+
     def update_transaction(self, tx_id: int, **fields: Any) -> Transaction:
         bad = set(fields) - set(TRANSACTION_FIELDS)
         if bad:
@@ -363,8 +385,9 @@ class Repository:
         try:
             with self.db.tenant(self.user_id, read_only=True, timeout_ms=5000) as conn:
                 cur = conn.execute(wrapped, tuple(params) if params else None)
+                fetched = cur.fetchall()
                 cols = [d.name for d in cur.description or []]
-                rows = [[jsonable(v) for v in r.values()] for r in cur.fetchall()]
+                rows = [[jsonable(v) for v in r.values()] for r in fetched]
         except psycopg.Error as exc:
             raise ValueError(f"Query rejected: {str(exc).strip().splitlines()[0]}") from exc
         truncated = len(rows) > limit

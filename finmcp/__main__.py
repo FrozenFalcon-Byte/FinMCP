@@ -49,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--token", help="Personal MCP token (fm_...) that picks the account; also FINMCP_MCP_TOKEN")
     parser.add_argument("--user-email", help="Serve the account with this email (local mode)")
     parser.add_argument("--client", default="stdio", help="Client label recorded on writes (default: stdio)")
-    parser.add_argument("--llm", choices=["auto", "anthropic", "rules"], help="LLM mode (default: FINMCP_LLM or auto)")
+    parser.add_argument("--llm", choices=["auto", "openrouter", "anthropic", "rules"], help="LLM mode (default: FINMCP_LLM or auto)")
     parser.add_argument("--seed", action="store_true", help="Insert demo data (idempotent) before serving")
     parser.add_argument("--seed-only", action="store_true", help="Insert demo data and exit")
     parser.add_argument("--seed-if-empty", action="store_true", help="Insert demo data only when the ledger is empty")

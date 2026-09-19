@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import hmac
 import logging
 import threading
 import time
@@ -16,13 +17,15 @@ import jwt
 from jwt import PyJWKClient
 
 from finmcp.config import Settings
-from finmcp.db.accounts import AccountStore, Principal, Profile
+from finmcp.db.accounts import AccountStore, Principal, Profile, hash_token
 
 log = logging.getLogger("finmcp.api.auth")
 
 LOCAL_ISSUER = "finmcp-local"
 LOCAL_TTL = 30 * 24 * 3600
 AUDIENCE = "authenticated"
+RESET_AUDIENCE = "finmcp-password-reset"
+RESET_TTL = 30 * 60
 
 
 class RateLimiter:
@@ -60,7 +63,7 @@ class Authenticator:
         self._jwks: PyJWKClient | None = None
         if settings.supabase_configured and settings.supabase_url:
             self._jwks = PyJWKClient(f"{settings.supabase_url}/auth/v1/.well-known/jwks.json", cache_keys=True, lifespan=3600)
-        self._seen: dict[str, float] = {}
+        self._seen: dict[str, tuple[float, Profile]] = {}  # verified accounts, so a request costs no database round trip
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------ local sessions
@@ -70,6 +73,25 @@ class Authenticator:
         claims = {"iss": LOCAL_ISSUER, "aud": AUDIENCE, "sub": profile.id, "email": profile.email,
                   "user_metadata": {"name": profile.name}, "iat": now, "exp": now + LOCAL_TTL}
         return jwt.encode(claims, self.settings.jwt_secret, algorithm="HS256")
+
+    def issue_reset_token(self, user_id: str, password_hash: str) -> str:
+        """A 30-minute, single-use password reset token. It carries a fingerprint of the current password hash, so it
+        stops working the moment the password changes (including by using it)."""
+        now = int(time.time())
+        claims = {"iss": LOCAL_ISSUER, "aud": RESET_AUDIENCE, "sub": user_id, "pwf": hash_token(password_hash)[:24], "iat": now, "exp": now + RESET_TTL}
+        return jwt.encode(claims, self.settings.jwt_secret, algorithm="HS256")
+
+    def reset_subject(self, token: str) -> str | None:
+        """The user id a reset token is valid for, or None when it is expired, forged or already used."""
+        try:
+            claims = jwt.decode(token, self.settings.jwt_secret, algorithms=["HS256"], audience=RESET_AUDIENCE, issuer=LOCAL_ISSUER,
+                                options={"require": ["sub", "exp", "pwf"]})
+        except jwt.PyJWTError:
+            return None
+        state = self.store.local_password_state(user_id=str(claims["sub"]))
+        if state is None or not hmac.compare_digest(hash_token(state[1])[:24], str(claims["pwf"])):
+            return None
+        return state[0]
 
     # ------------------------------------------------------------ verification
 
@@ -88,7 +110,7 @@ class Authenticator:
         email = str(claims.get("email") or f"{user_id}@unknown.invalid")
         meta = claims.get("user_metadata") or {}
         name = str(meta.get("name") or meta.get("full_name") or claims.get("name") or email.split("@")[0])
-        profile = self._ensure_profile(user_id, email, name)
+        profile = self.ensure_profile(user_id, email, name)
         return Principal(user_id=profile.id, email=profile.email, name=profile.name, via=self.mode)
 
     def decode(self, token: str) -> dict[str, Any] | None:
@@ -112,17 +134,18 @@ class Authenticator:
             log.debug("token rejected: %s", exc)
             return None
 
-    def _ensure_profile(self, user_id: str, email: str, name: str) -> Profile:
+    def ensure_profile(self, user_id: str, email: str, name: str) -> Profile:
+        """The account's profile, created on first sight. Kept in memory for a few minutes: the database can be a long
+        round trip away, and this runs on every request. Profile edits and deletions call `forget`."""
         now = time.time()
         with self._lock:
-            fresh = now - self._seen.get(user_id, 0) < 300
-        if not fresh:
-            profile = self.store.upsert_profile(user_id, email, name)
-            with self._lock:
-                self._seen[user_id] = now
-            return profile
-        profile = self.store.get_profile(user_id)
-        return profile or self.store.upsert_profile(user_id, email, name)
+            hit = self._seen.get(user_id)
+        if hit and now - hit[0] < 300:
+            return hit[1]
+        profile = self.store.upsert_profile(user_id, email, name)
+        with self._lock:
+            self._seen[user_id] = (now, profile)
+        return profile
 
     def forget(self, user_id: str) -> None:
         with self._lock:

@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
     settings = load_settings()
     driver = make_driver(os.environ.get("FINMCP_AGENT_DRIVER", "auto"), model=settings.model,
                          effort=os.environ.get("FINMCP_AGENT_EFFORT", "medium"), fallbacks=settings.fallbacks,
-                         api_key_present=settings.api_key_present)
+                         backend=settings.llm_backend)
     registry = Registry(settings, driver)
     await registry.start()
     app.state.registry = registry
@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
         s = reg.settings
         out: dict[str, Any] = {
             "ok": True, "version": __version__, "driver": reg.driver.name,
-            "model": s.model if reg.driver.name == "anthropic" else None,
+            "model": s.model if reg.driver.name in {"anthropic", "openrouter"} else None,
             "auth_mode": reg.auth.mode, "database": "supabase" if s.supabase_configured else "local", "rls": reg.db.rls,
             "accounts": reg.store.count_profiles(), "authenticated": principal is not None,
             "mcp_endpoint": f"{s.public_url}/mcp",

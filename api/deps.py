@@ -17,8 +17,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import dataclasses
+import json
 import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -32,6 +35,7 @@ from agent.host import ElicitationBroker, Trace, roots_callback, sampling_callba
 from finmcp.config import ROOT, Settings
 from finmcp.db import Database, database_for
 from finmcp.db.accounts import AccountStore, Principal, Profile
+from finmcp.db.events import events
 from finmcp.server import create_server
 from finmcp.subscriptions import ALL_RESOURCES, buses
 
@@ -39,6 +43,7 @@ from .auth import Authenticator, RateLimiter, bearer_from_header
 
 log = logging.getLogger("finmcp.api")
 UPLOAD_ROOT = ROOT / "data" / "uploads"
+CACHE_TTL = 90.0  # seconds; writes from this process invalidate at once, the TTL covers other writers (scripts, SQL)
 
 
 @dataclass
@@ -57,6 +62,9 @@ class AppContext:
     broker: ElicitationBroker
     locks: dict[str, asyncio.Lock] = field(default_factory=dict)
     closed: asyncio.Event = field(default_factory=asyncio.Event)
+    cache: dict[str, tuple[int, float, Any]] = field(default_factory=dict)
+    inflight: dict[str, asyncio.Future[Any]] = field(default_factory=dict)
+    read_only_tools: set[str] | None = None
 
     @property
     def user_id(self) -> str:
@@ -90,6 +98,7 @@ class Registry:
         self._open_lock = asyncio.Lock()
         self._queue: asyncio.Queue[_Open | None] = asyncio.Queue()
         self._host: asyncio.Task[None] | None = None
+        self._warming: set[asyncio.Task[None]] = set()
 
     # ------------------------------------------------------------ connection host
 
@@ -159,6 +168,9 @@ class Registry:
             ctx = AppContext(principal=principal, profile=profile, settings=settings, connection=web, assistant=assistant, agent=agent,
                              driver=self.driver, upload_dir=upload_dir, trace=trace, broker=broker, closed=closed)
             self.contexts[profile.id] = ctx
+            task = asyncio.create_task(warm(ctx), name=f"warm-{profile.id[:8]}")
+            self._warming.add(task)
+            task.add_done_callback(self._warming.discard)
             return ctx
 
     def forget(self, user_id: str) -> None:
@@ -227,8 +239,68 @@ def _clean(message: str) -> str:
     return message
 
 
+async def cached(ctx: AppContext, key: str, load: Any) -> Any:
+    """Serve a read from the account's cache while no write has happened since, share one database trip between
+    identical requests that arrive together, and hand every caller its own copy."""
+    version = events.version(ctx.user_id)
+    hit = ctx.cache.get(key)
+    if hit and hit[0] == version and time.monotonic() - hit[1] < CACHE_TTL:
+        return copy.deepcopy(hit[2])
+    pending = ctx.inflight.get(key)
+    if pending is not None:
+        return copy.deepcopy(await asyncio.shield(pending))
+    fut: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
+    ctx.inflight[key] = fut
+    try:
+        value = await load()
+    except BaseException as exc:
+        fut.set_exception(exc)
+        fut.exception()  # retrieved: waiters re-raise it, nobody is left with an unobserved error
+        raise
+    finally:
+        ctx.inflight.pop(key, None)
+    fut.set_result(value)
+    if events.version(ctx.user_id) == version:  # a write landed while loading: do not keep what may predate it
+        if len(ctx.cache) > 300:
+            ctx.cache.clear()
+        ctx.cache[key] = (version, time.monotonic(), value)
+    return copy.deepcopy(value)
+
+
+async def _read_only(ctx: AppContext) -> set[str]:
+    if ctx.read_only_tools is None:
+        tools = await ctx.connection.list_tools()
+        ctx.read_only_tools = {t.name for t in tools if t.annotations is not None and t.annotations.read_only_hint}
+    return ctx.read_only_tools
+
+
+async def read_resource(ctx: AppContext, uri: str) -> Any:
+    return await cached(ctx, f"res:{uri}", lambda: ctx.connection.read_resource_json(uri))
+
+
+async def warm(ctx: AppContext) -> None:
+    """Start the Home screen's reads the moment an account's session opens, so they are ready or in flight by the time
+    the browser asks for them."""
+    with contextlib.suppress(Exception):
+        await asyncio.gather(
+            call_tool(ctx, "get_overview", {}),
+            call_tool(ctx, "get_summary", {"period": "last 30 days", "group_by": "day", "top": 15}),
+            read_resource(ctx, "finmcp://status"),
+            read_resource(ctx, "finmcp://categories"),
+            return_exceptions=True,
+        )
+
+
 async def call_tool(ctx: AppContext, name: str, arguments: dict[str, Any] | None = None) -> Any:
-    """Call an MCP tool on the account's 'web' connection and return its structured payload; tool errors become HTTP 400."""
+    """Call an MCP tool on the account's 'web' connection and return its structured payload; tool errors become HTTP 400.
+    Read-only tools (by their MCP annotations) are served from the account's read cache."""
+    if name in await _read_only(ctx):
+        key = f"tool:{name}:{json.dumps(arguments or {}, sort_keys=True, default=str)}"
+        return await cached(ctx, key, lambda: _call_tool(ctx, name, arguments))
+    return await _call_tool(ctx, name, arguments)
+
+
+async def _call_tool(ctx: AppContext, name: str, arguments: dict[str, Any] | None = None) -> Any:
     outcome = await ctx.connection.call_tool(name, arguments or {})
     if not outcome.ok:
         raise HTTPException(400, _clean(outcome.text))

@@ -6,6 +6,7 @@ import { api } from "./api";
 import { useAuth } from "./auth";
 import { subscribeEvents, type LedgerEvent } from "./events";
 import { useStatus } from "./status";
+import { markStale, setCacheOwner } from "./cache";
 
 interface LedgerStatus { transactions: number; uncategorized: number; needs_review: number; last_date: string | null; merchant_memory: number; goals: number }
 
@@ -23,6 +24,7 @@ const LedgerContext = createContext<LedgerValue>({ version: 0, bump: () => {}, l
 export function LedgerProvider({ children }: { children: ReactNode }) {
   const { refresh } = useStatus();
   const { token, supabase, user } = useAuth();
+  setCacheOwner(user?.id ?? null); // before any screen below reads the cache
   const [version, setVersion] = useState(0);
   const [lastSync, setLastSync] = useState<number | null>(null);
   const [live, setLive] = useState(false);
@@ -32,6 +34,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
   const bump = useCallback(() => {
     signature.current = null;
+    markStale();
     setVersion((v) => v + 1);
     void refresh();
   }, [refresh]);

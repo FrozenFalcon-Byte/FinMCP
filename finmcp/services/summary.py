@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import calendar
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from typing import Any
 
@@ -16,7 +17,21 @@ def _round(v: float | None) -> float:
 def get_summary(repo: Repository, period: str | None = None, group_by: str = "category", top: int = 15, today: date | None = None) -> dict[str, Any]:
     p: Period = resolve_period(period, today)
     start, end = p.start.isoformat(), p.end.isoformat()
-    totals = repo.totals(start, end)
+    if group_by not in {"category", "merchant", "day", "week", "month"}:
+        raise ValueError("group_by must be one of: category, merchant, day, week, month")
+    # Every query below is independent: issue them together (each in its own short transaction).
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="summary") as pool:
+        f_totals = pool.submit(repo.totals, start, end)
+        f_income = pool.submit(repo.spend_by_category, start, end, direction="credit")
+        if group_by == "category":
+            f_a, f_b = pool.submit(repo.list_categories), pool.submit(repo.spend_by_category, start, end)
+        elif group_by == "merchant":
+            f_a, f_b = pool.submit(repo.top_merchants, start, end, n=top), None
+        else:
+            f_a = pool.submit(repo.series, start, end, bucket=group_by, direction="credit")
+            f_b = pool.submit(repo.series, start, end, bucket=group_by)
+        totals, income = f_totals.result(), f_income.result()
+        part_a, part_b = f_a.result(), f_b.result() if f_b is not None else None
     spent = _round(totals["spent"])
     out: dict[str, Any] = {
         "period": p.as_dict(),
@@ -33,9 +48,8 @@ def get_summary(repo: Repository, period: str | None = None, group_by: str = "ca
         "breakdown": [],
     }
     if group_by == "category":
-        cats = {c.name: c for c in repo.list_categories()}
-        rows = repo.spend_by_category(start, end)
-        for r in rows:
+        cats = {c.name: c for c in part_a}
+        for r in part_b:
             cat = cats.get(r["category"])
             share = (float(r["total"]) / spent * 100) if spent and r["kind"] != "transfer" else None
             entry: dict[str, Any] = {
@@ -48,20 +62,17 @@ def get_summary(repo: Repository, period: str | None = None, group_by: str = "ca
             out["breakdown"].append(entry)
         out["breakdown"] = out["breakdown"][:top]
     elif group_by == "merchant":
-        for r in repo.top_merchants(start, end, n=top):
+        for r in part_a:
             out["breakdown"].append({"merchant": r["merchant"], "category": r["category"], "spent": _round(r["total"]), "count": int(r["n"])})
-    elif group_by in {"day", "week", "month"}:
-        credits = {r["bucket"]: r for r in repo.series(start, end, bucket=group_by, direction="credit")}
-        buckets = {r["bucket"]: r for r in repo.series(start, end, bucket=group_by)}
+    else:
+        credits = {r["bucket"]: r for r in part_a}
+        buckets = {r["bucket"]: r for r in part_b}
         for key in sorted(set(buckets) | set(credits)):
             debit, credit = buckets.get(key), credits.get(key)
             out["breakdown"].append({
                 group_by: key, "spent": _round(debit["total"] if debit else 0), "count": int(debit["n"]) if debit else 0,
                 "received": _round(credit["total"] if credit else 0), "credit_count": int(credit["n"]) if credit else 0,
             })
-    else:
-        raise ValueError("group_by must be one of: category, merchant, day, week, month")
-    income = repo.spend_by_category(start, end, direction="credit")
     out["income_breakdown"] = [{"category": r["category"], "received": _round(r["total"]), "count": int(r["n"])} for r in income]
     return out
 

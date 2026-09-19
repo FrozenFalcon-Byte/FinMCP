@@ -1,4 +1,8 @@
+/* Adding to the ledger. The bar in the top bar (or the N key) opens a card: type a line the way you would say it,
+   and the pieces it understood (amount, merchant, date, category) settle in underneath as you write. */
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
 import { useLedger } from "../lib/ledger";
@@ -8,16 +12,19 @@ import type { Category, Transaction } from "../lib/types";
 import { useToast } from "./Toast";
 import { Icon, Spinner } from "./ui";
 
+const SPRING = { type: "spring", stiffness: 460, damping: 32, mass: 0.7 } as const;
+const POP = { initial: { opacity: 0, y: 8, scale: 0.92 }, animate: { opacity: 1, y: 0, scale: 1 }, exit: { opacity: 0, scale: 0.92 }, transition: SPRING };
+
 export function QuickAdd() {
   const { currency } = useStatus();
   const { bump, version } = useLedger();
   const toast = useToast();
+  const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [cats, setCats] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [focused, setFocused] = useState(false);
+  const [done, setDone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const blurTimer = useRef<number | null>(null);
 
   useEffect(() => {
     api.get<Category[]>("/categories").then((cs) => setCats(cs.map((c) => c.name))).catch(() => undefined);
@@ -27,13 +34,23 @@ export function QuickAdd() {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement as HTMLElement | null;
       const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
-      if (!typing && (e.key === "n" || e.key === "N") && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); inputRef.current?.focus(); }
+      if (!typing && !open && (e.key === "n" || e.key === "N") && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); setOpen(true); }
+      if (open && e.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setDone(false);
+    document.body.style.overflow = "hidden";
+    const t = window.setTimeout(() => inputRef.current?.focus(), 60);
+    return () => { window.clearTimeout(t); document.body.style.overflow = ""; };
+  }, [open]);
 
   const draft = useMemo(() => parseQuickAdd(text, cats), [text, cats]);
+  const credit = draft.direction === "credit";
 
   const submit = async () => {
     if (!draft.valid || busy) return;
@@ -44,8 +61,9 @@ export function QuickAdd() {
         description: draft.description ?? undefined, category: draft.category ?? undefined, source: "manual",
       });
       const tx = r.transaction;
-      setText("");
       bump();
+      setDone(true);
+      window.setTimeout(() => { setOpen(false); setText(""); }, 650);
       toast(
         `${tx.direction === "credit" ? "Received" : "Spent"} ${money(tx.amount, currency, 2)} · ${tx.merchant} → ${tx.category ?? "uncategorized"}`,
         "ok",
@@ -58,38 +76,88 @@ export function QuickAdd() {
     }
   };
 
-  const onFocus = () => { if (blurTimer.current) window.clearTimeout(blurTimer.current); setFocused(true); };
-  const onBlur = () => { blurTimer.current = window.setTimeout(() => setFocused(false), 120); };
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Escape") { if (text) setText(""); else inputRef.current?.blur(); }
-  };
-  const showPanel = focused && text.trim().length > 0;
+  const tokens: { k: string; label: string; value: string | null }[] = [
+    { k: "when", label: "on", value: draft.dateLabel },
+    { k: "cat", label: "filed under", value: draft.category ?? "auto" },
+    ...(draft.description ? [{ k: "note", label: "note", value: draft.description }] : []),
+  ];
 
   return (
-    <div className="qa">
-      <form className="box" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+    <>
+      <button type="button" className="qa-trigger" onClick={() => setOpen(true)} aria-label="Add a transaction">
         <Icon name="plus" className="lead" />
-        <input ref={inputRef} id="quick-add" value={text} onChange={(e) => setText(e.target.value)} onFocus={onFocus} onBlur={onBlur} onKeyDown={onKeyDown}
-          placeholder="Add anything: 450 swiggy · coffee 120 yesterday · +50000 salary" autoComplete="off" spellCheck={false} aria-label="Quick add a transaction" />
-        {text ? <button className="go" type="submit" disabled={!draft.valid || busy}>{busy ? <Spinner /> : <>Add <Icon name="enter" /></>}</button> : <span className="kbd">N</span>}
-      </form>
-      {showPanel ? (
-        <div className="panel" role="status">
-          <div className="parse">
-            {draft.amount ? <span className="tok amt"><span className="k">amount</span><b>{money(draft.amount, currency, 2)}</b></span> : <span className="tok miss">amount</span>}
-            {draft.merchant ? <span className="tok"><span className="k">{draft.direction === "credit" ? "from" : "at"}</span><b>{draft.merchant}</b></span> : <span className="tok miss">merchant</span>}
-            <span className={`tok ${draft.direction === "credit" ? "in" : ""}`}><b>{draft.direction === "credit" ? "money in" : "money out"}</b></span>
-            <span className="tok"><span className="k">on</span><b>{draft.dateLabel}</b></span>
-            <span className="tok"><span className="k">filed</span><b>{draft.category ?? "auto"}</b></span>
-            {draft.description ? <span className="tok"><span className="k">note</span><b>{draft.description}</b></span> : null}
-          </div>
-          <div className="hint">
-            <span>{draft.valid ? "Enter to add" : "Needs an amount and a merchant"}</span>
-            <span>#category · (note) · yesterday · 12 sep · + for money in</span>
-            {!draft.valid ? <span>e.g. <code>{QUICK_ADD_EXAMPLES[0]}</code></span> : null}
-          </div>
-        </div>
-      ) : null}
-    </div>
+        <span className="ph">Add anything: 450 swiggy · coffee 120 yesterday · +50000 salary</span>
+        <span className="kbd">N</span>
+      </button>
+      {createPortal(
+        <AnimatePresence>
+          {open ? (
+            <motion.div key="qa" className="qa-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+              onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+              <motion.form className={`qa-card ${credit ? "in" : ""}`} role="dialog" aria-modal="true" aria-label="New entry"
+                initial={{ opacity: 0, y: 40, scale: 0.94 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 24, scale: 0.97 }} transition={SPRING}
+                onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+                <div className="qa-head">
+                  <span className="qa-title">New entry</span>
+                  <button type="button" className="qa-x" onClick={() => setOpen(false)} aria-label="Close"><Icon name="x" /></button>
+                </div>
+
+                <div className="qa-amount">
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.span key={`${draft.amount ?? "none"}-${draft.direction}`} className={`num ${draft.amount ? "" : "empty"}`}
+                      initial={{ opacity: 0, y: 14, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -14, filter: "blur(4px)" }}
+                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
+                      {draft.amount ? `${credit ? "+" : "−"}${money(draft.amount, currency, 2)}` : money(0, currency)}
+                    </motion.span>
+                  </AnimatePresence>
+                  <motion.span className="qa-dir" layout transition={SPRING}>{credit ? "money in" : "money out"}</motion.span>
+                </div>
+                <div className="qa-merchant">
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.span key={draft.merchant ?? ""} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
+                      {draft.merchant ? <>{credit ? "from" : "at"} <b>{draft.merchant}</b></> : "Who was it? Type a merchant"}
+                    </motion.span>
+                  </AnimatePresence>
+                </div>
+
+                <div className="qa-field">
+                  <input ref={inputRef} value={text} onChange={(e) => setText(e.target.value)} placeholder="450 swiggy" autoComplete="off" spellCheck={false} aria-label="What happened" />
+                  <motion.span className="qa-underline" animate={{ scaleX: text ? 1 : 0.18 }} transition={SPRING} />
+                </div>
+
+                <motion.div className="qa-tokens" layout>
+                  <AnimatePresence initial={false}>
+                    {text.trim() ? tokens.map((t) => (
+                      <motion.span layout key={t.k} className="qa-tok" {...POP}>
+                        <span className="k">{t.label}</span>
+                        <AnimatePresence mode="popLayout" initial={false}>
+                          <motion.b key={t.value} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.15 }}>{t.value}</motion.b>
+                        </AnimatePresence>
+                      </motion.span>
+                    )) : QUICK_ADD_EXAMPLES.slice(0, 4).map((ex, i) => (
+                      <motion.button layout type="button" key={ex} className="qa-ex" {...POP} transition={{ ...SPRING, delay: 0.04 * i }}
+                        whileHover={{ y: -2 }} whileTap={{ scale: 0.95 }} onClick={() => { setText(ex); inputRef.current?.focus(); }}>{ex}</motion.button>
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+
+                <div className="qa-foot">
+                  <span className="qa-hint">{text && !draft.valid ? "Needs an amount and a merchant" : "#category · (note) · yesterday · 12 sep · + for money in"}</span>
+                  <motion.button type="submit" className={`qa-go ${done ? "done" : ""}`} disabled={!draft.valid || busy || done}
+                    whileHover={draft.valid ? { scale: 1.04 } : undefined} whileTap={draft.valid ? { scale: 0.95 } : undefined} transition={SPRING}>
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.span key={done ? "done" : busy ? "busy" : "idle"} className="in" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                        {done ? <><Icon name="check" />Added</> : busy ? <Spinner /> : <>Add <Icon name="enter" /></>}
+                      </motion.span>
+                    </AnimatePresence>
+                  </motion.button>
+                </div>
+              </motion.form>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>,
+        document.body,
+      )}
+    </>
   );
 }

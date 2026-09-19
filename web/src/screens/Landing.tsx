@@ -6,9 +6,10 @@ import {
   AnimatePresence, motion, useInView, useMotionValueEvent, useReducedMotion, useScroll, useSpring, useTransform, useVelocity, type MotionValue,
 } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Icon, useCountUp } from "../components/ui";
 import { useAuth } from "../lib/auth";
+import { NOTES, snippet } from "./Connect";
 import "./landing.css";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -81,7 +82,9 @@ function HomeScreen() {
 
 /* ------------------------------------------------------------------ nav + floating CTA */
 
-function Nav({ signedIn }: { signedIn: boolean }) {
+export function Nav({ signedIn }: { signedIn: boolean }) {
+  const onLanding = useLocation().pathname === "/";
+  const to = (hash: string) => (onLanding ? hash : `/${hash}`); // other pages link back into the landing sections
   const { scrollY } = useScroll();
   const [hidden, setHidden] = useState(false);
   const [solid, setSolid] = useState(false);
@@ -96,10 +99,8 @@ function Nav({ signedIn }: { signedIn: boolean }) {
       <div className="in">
         <Brand />
         <nav className="links">
-          <a href="#story">How it works</a>
-          <a href="#mcp">MCP</a>
-          <a href="#security">Security</a>
-          <a href="#faq">FAQ</a>
+          <a href={to("#story")}>How it works</a>
+          <a href={to("#security")}>Security</a>
         </nav>
         <div className="acts">
           {signedIn ? <Link className="l-btn" to="/app">Open app</Link> : (<>
@@ -287,11 +288,10 @@ function Story() {
   const { scrollYProgress: p } = useScroll({ target: ref, offset: ["start start", "end end"] });
   const [i, setI] = useState(0);
   useMotionValueEvent(p, "change", (v) => setI(Math.min(STORY.length - 1, Math.max(0, Math.floor(v * STORY.length * 0.999)))));
-  const bg = useTransform(p, [0, 0.08, 0.92, 1], ["#ffffff", "#4d43fe", "#4d43fe", "#ffffff"]);
   const fill = useTransform(p, [0, 1], ["0%", "100%"]);
   const tilt = useTransform(p, [0, 0.5, 1], [-4, 0, 4]);
   return (
-    <motion.section id="story" className="l-story" ref={ref} style={{ background: bg }}>
+    <section id="story" className="l-story" ref={ref}>
       <div className="sticky">
         <div className="chaps">
           <span className="kicker">How it works</span>
@@ -311,21 +311,32 @@ function Story() {
           </AnimatePresence>
         </Phone>
       </div>
-    </motion.section>
+    </section>
   );
 }
 
 /* ------------------------------------------------------------------ MCP chapter: horizontal track driven by vertical scroll */
 
-const PRIMITIVES = [
-  { n: "24", h: "Tools", p: "Add, categorise, import statements, budgets, goals, guarded SQL. Written once, used by every client." },
-  { n: "13", h: "Resources", p: "Overview, alerts, recurring bills, review queue, month-by-month transactions as a URI template." },
-  { n: "4", h: "Prompts", p: "Monthly review, subscription audit, budget plan, bulk categorising: one click in any MCP host." },
-  { n: "↺", h: "Sampling", p: "New merchants go to your client's model in one batched round trip. The server holds no API key." },
-  { n: "?", h: "Elicitation", p: "The server asks you when it is unsure, and before anything destructive. You always have the last word." },
-  { n: "⌂", h: "Roots", p: "Statements are read only from folders the client allows. Everything else is refused." },
-  { n: "●", h: "Subscriptions", p: "Write from Claude Desktop and this app refreshes the same second, through subscriptions/listen." },
-  { n: "⇥", h: "Completion", p: "Months and arguments autocomplete, in this app and in every host that supports it." },
+/* Each primitive is a card you can open: it leads to the same primitive running live on the in-app MCP page. The little
+   picture on each card is what that primitive looks like on the wire, drawn in HTML (no images, no glyph icons). */
+type Tone = "blue" | "ink" | "paper" | "sun";
+const PRIMITIVES: { id: string; n?: string; h: string; method: string; p: string; tone: Tone; viz: ReactNode }[] = [
+  { id: "playground", n: "24", h: "Tools", method: "tools/call", tone: "blue", p: "Add, categorise, import, budget, plan goals and run guarded SQL. Written once, used by every client.",
+    viz: <div className="viz call"><code>add_transaction</code><span className="arg">merchant: <i>"Swiggy"</i>, amount: <i>420</i></span><span className="ok"><Icon name="check" />Food &amp; Dining</span></div> },
+  { id: "playground", n: "13", h: "Resources", method: "resources/read", tone: "ink", p: "Overview, alerts, recurring bills, the review queue, and any month as a URI template.",
+    viz: <div className="viz uris">{["finmcp://overview", "finmcp://alerts", "finmcp://transactions/2026-09"].map((u) => <code key={u}><span className="live-dot" />{u}</code>)}</div> },
+  { id: "playground", n: "4", h: "Prompts", method: "prompts/get", tone: "paper", p: "Monthly review, subscription audit, budget plan, bulk categorising: one click in any MCP host.",
+    viz: <div className="viz chips">{["/monthly-review", "/subscription-audit", "/budget-plan"].map((c) => <span key={c}>{c}</span>)}</div> },
+  { id: "sampling", h: "Sampling", method: "sampling/createMessage", tone: "sun", p: "Merchants no rule knows go to your client's model in one batched round trip. The server holds no API key.",
+    viz: <div className="viz relay"><span className="node">server</span><span className="wire"><i /></span><span className="node">your model</span></div> },
+  { id: "elicitation", h: "Elicitation", method: "elicitation/create", tone: "ink", p: "When unsure, and before anything destructive, the server asks you. You always have the last word.",
+    viz: <div className="viz ask"><span className="q">Where does <b>Moss &amp; Fern Co</b> belong?</span><span className="btns"><span>Shopping</span><span className="on">Home</span></span></div> },
+  { id: "roots", h: "Roots", method: "roots/list", tone: "blue", p: "Statements are read only from folders the client allows. Anything else is refused.",
+    viz: <div className="viz roots"><span className="yes"><Icon name="check" />~/Statements</span><span className="no"><Icon name="x" />/etc/hosts</span></div> },
+  { id: "subscription", h: "Subscriptions", method: "subscriptions/listen", tone: "paper", p: "Write from Claude Desktop and this app refreshes the same second.",
+    viz: <div className="viz pulse"><span className="ring" /><code>resources/updated</code></div> },
+  { id: "completion", h: "Completion", method: "completion/complete", tone: "sun", p: "Months and arguments autocomplete, here and in every host that supports it.",
+    viz: <div className="viz complete"><span className="field">2026-0<i /></span><span className="opts"><span className="on">2026-09</span><span>2026-08</span><span>2026-07</span></span></div> },
 ];
 
 function McpTrack() {
@@ -341,24 +352,29 @@ function McpTrack() {
   const { scrollYProgress: p } = useScroll({ target: ref, offset: ["start start", "end end"] });
   const x = useSpring(useTransform(p, [0.05, 0.95], [0, -dist]), { stiffness: 120, damping: 30, mass: 0.4 });
   const headY = useTransform(p, [0, 0.2], [40, 0]);
+  const bar = useTransform(p, [0.05, 0.95], ["0%", "100%"]);
   return (
     <section id="mcp" className="l-mcp" ref={ref} style={{ height: `calc(100vh + ${dist}px)` }}>
       <div className="sticky">
         <motion.div className="head" style={{ y: headY }}>
-          <span className="kicker light">Why MCP</span>
-          <h2>One ledger. Every assistant.</h2>
-          <p>The Model Context Protocol is how AI apps plug into tools and data. FinMCP uses all of it, so your money works the same in this app, in Claude and in whatever comes next.</p>
+          <span className="kicker">Why MCP</span>
+          <h2>One ledger.<br /><span className="accent">Every assistant.</span></h2>
+          <p>The Model Context Protocol is how AI apps plug into tools and data. FinMCP uses all eight parts of it, so your money works the same here, in Claude and in whatever comes next. Open any card to watch it run.</p>
         </motion.div>
         <motion.div className="track" ref={track} style={{ x }}>
           {PRIMITIVES.map((c, k) => (
-            <div className="card" key={c.h}>
-              <span className="n">{c.n}</span>
-              <h3>{c.h}</h3>
-              <p>{c.p}</p>
-              <span className="idx">{String(k + 1).padStart(2, "0")} / {PRIMITIVES.length}</span>
-            </div>
+            <Link to={`/app/mcp#${c.id}`} className={`p-card ${c.tone}`} key={c.h}>
+              <div className="p-top"><span className="p-idx">{String(k + 1).padStart(2, "0")}</span><code className="p-method">{c.method}</code></div>
+              {c.viz}
+              <div className="p-body">
+                <h3>{c.n ? <b className="p-n">{c.n}</b> : null}{c.h}</h3>
+                <p>{c.p}</p>
+              </div>
+              <span className="p-go">See it live<Icon name="arrowRight" /></span>
+            </Link>
           ))}
         </motion.div>
+        <div className="p-progress" aria-hidden><motion.span style={{ width: bar }} /></div>
       </div>
     </section>
   );
@@ -366,13 +382,15 @@ function McpTrack() {
 
 /* ------------------------------------------------------------------ clients + stats */
 
-const CLIENTS = [
-  { n: "This app", d: "Two built-in MCP clients: the screens and the assistant" },
-  { n: "Claude Desktop", d: "Paste one config block with your personal token" },
-  { n: "Claude Code", d: "claude mcp add --transport http finmcp …" },
-  { n: "Cursor", d: "Add it as a global MCP server" },
-  { n: "Your scripts", d: "Streamable HTTP or stdio, same tools" },
+type ClientId = "app" | "claude-desktop" | "claude-code" | "cursor" | "stdio";
+const CLIENTS: { id: ClientId; n: string; d: string }[] = [
+  { id: "app", n: "This app", d: "Two built-in MCP clients: the screens and the assistant" },
+  { id: "claude-desktop", n: "Claude Desktop", d: "One config block with your personal token" },
+  { id: "claude-code", n: "Claude Code", d: "One command in any terminal" },
+  { id: "cursor", n: "Cursor", d: "A global MCP server in mcp.json" },
+  { id: "stdio", n: "Your scripts", d: "Streamable HTTP or stdio, same tools" },
 ];
+const HOST = "https://your-host/mcp";
 
 function Stat({ to, suffix, label }: { to: number; suffix?: string; label: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -381,22 +399,43 @@ function Stat({ to, suffix, label }: { to: number; suffix?: string; label: strin
   return <div className="stat" ref={ref}><b>{Math.round(n ?? 0)}{suffix}</b><span>{label}</span></div>;
 }
 
-function Clients() {
+function Clients({ signedIn }: { signedIn: boolean }) {
+  const [pick, setPick] = useState<ClientId>("claude-code");
+  const [copied, setCopied] = useState(false);
+  const code = pick === "app" ? "" : snippet(pick, HOST, "");
+  const copy = () => { void navigator.clipboard?.writeText(code).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1400); }); };
   return (
     <section className="l-clients">
       <motion.div className="head" {...rise}>
         <span className="kicker">Works where you already are</span>
         <h2>Connect once.<br />Ask from anywhere.</h2>
       </motion.div>
-      <div className="grid">
+      <div className="grid" role="tablist" aria-label="MCP clients">
         {CLIENTS.map((c, k) => (
-          <motion.div className="tile" key={c.n} initial={{ opacity: 0, y: 50, rotate: k % 2 ? 2 : -2 }} whileInView={{ opacity: 1, y: 0, rotate: 0 }} viewport={{ once: true, margin: "-40px" }} transition={{ duration: 0.7, delay: k * 0.08, ease: EASE }}>
+          <motion.button type="button" role="tab" aria-selected={pick === c.id} className={`tile ${pick === c.id ? "on" : ""}`} key={c.id} onClick={() => setPick(c.id)}
+            initial={{ opacity: 0, y: 50, rotate: k % 2 ? 2 : -2 }} whileInView={{ opacity: 1, y: 0, rotate: 0 }} viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.7, delay: k * 0.08, ease: EASE }} whileHover={{ y: -6 }} whileTap={{ scale: 0.97 }}>
             <span className="dot" /><b>{c.n}</b><small>{c.d}</small>
-          </motion.div>
+          </motion.button>
         ))}
       </div>
-      <motion.pre className="snippet" {...rise}>{`claude mcp add --transport http finmcp https://your-host/mcp \\
-  --header "Authorization: Bearer fm_…"`}</motion.pre>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div key={pick} className="setup" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.28, ease: EASE }}>
+          {pick === "app" ? (
+            <div className="setup-app">
+              <p>Nothing to set up. Sign in and the app opens two MCP sessions for you: one for the screens, one for the assistant.</p>
+              <Link className="l-btn" to={signedIn ? "/app" : "/register"}>{signedIn ? "Open the app" : "Create your ledger"} <Icon name="arrowRight" /></Link>
+            </div>
+          ) : (<>
+            <div className="setup-head">
+              <span>{NOTES[pick]}</span>
+              <button type="button" className="copy" onClick={copy}><Icon name={copied ? "check" : "copy"} />{copied ? "Copied" : "Copy"}</button>
+            </div>
+            <pre className="snippet">{code}</pre>
+            <span className="setup-foot">Your personal token (fm_…) comes from <Link to={signedIn ? "/app/connect" : "/register"}>Connect</Link> inside the app.</span>
+          </>)}
+        </motion.div>
+      </AnimatePresence>
       <div className="stats">
         <Stat to={24} label="MCP tools" />
         <Stat to={13} label="live resources" />
@@ -456,54 +495,17 @@ function BigCta({ signedIn }: { signedIn: boolean }) {
   );
 }
 
-/* ------------------------------------------------------------------ FAQ */
-
-const FAQ = [
-  { q: "What is MCP, in one line?", a: "The Model Context Protocol is an open standard for connecting AI apps to tools and data. FinMCP exposes your ledger as an MCP server, so any MCP client can use it with your permission." },
-  { q: "Do I need Claude or an API key to use FinMCP?", a: "No. The app works on its own: rules and merchant memory categorise most spending. With a key, the assistant answers questions and the server borrows that model through MCP sampling for unfamiliar merchants." },
-  { q: "Can Claude Desktop see everyone's data?", a: "No. A personal token maps to exactly one account, and Postgres row-level security enforces that on every query, whichever client is asking." },
-  { q: "What does the server do when it is unsure?", a: "It asks. Through MCP elicitation, the server pauses the tool call and shows you a question in the app. Deleting anything asks for confirmation too." },
-  { q: "Can I import bank statements?", a: "Yes: PDF and CSV statements, receipt photos and pasted SMS alerts. Duplicates are skipped by fingerprint, and the server may only read files from folders the client allows." },
-  { q: "Is it free?", a: "Yes. It runs on Supabase's free tier for auth and Postgres, and locally on an embedded Postgres when you are offline." },
-];
-
-function Faq() {
-  const [open, setOpen] = useState<number | null>(0);
-  return (
-    <section id="faq" className="l-faq">
-      <motion.h2 {...rise}>Questions, answered.</motion.h2>
-      <div className="list">
-        {FAQ.map((f, k) => (
-          <motion.div key={f.q} className={`qa ${open === k ? "open" : ""}`} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: k * 0.05 }}>
-            <button onClick={() => setOpen(open === k ? null : k)} aria-expanded={open === k}>
-              <span>{f.q}</span>
-              <motion.span className="chev" animate={{ rotate: open === k ? 180 : 0 }}><Icon name="arrowDown" /></motion.span>
-            </button>
-            <AnimatePresence initial={false}>
-              {open === k && (
-                <motion.div className="a" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.35, ease: EASE }}>
-                  <p>{f.a}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 /* ------------------------------------------------------------------ footer */
 
 const COLS: { h: string; l: [string, string][] }[] = [
-  { h: "Product", l: [["How it works", "#story"], ["Security", "#security"], ["FAQ", "#faq"], ["Sign in", "/login"]] },
-  { h: "MCP", l: [["Tools & resources", "#mcp"], ["Sampling", "#mcp"], ["Elicitation", "#mcp"], ["Subscriptions", "#mcp"]] },
+  { h: "Product", l: [["How it works", "#story"], ["Security", "#security"], ["Sign in", "/login"], ["Create account", "/register"]] },
+  { h: "MCP", l: [["Live inspector", "/app/mcp"], ["Tools & resources", "#mcp"], ["Sampling", "#mcp"], ["Elicitation", "#mcp"]] },
   { h: "Connect", l: [["Claude Desktop", "/app/connect"], ["Claude Code", "/app/connect"], ["Cursor", "/app/connect"], ["Any MCP client", "/app/connect"]] },
   { h: "Inside the app", l: [["MCP live", "/app/mcp"], ["Ask", "/app/ask"], ["Import", "/app/import"], ["Activity", "/app/activity"]] },
   { h: "Built with", l: [["Model Context Protocol", "https://modelcontextprotocol.io"], ["Supabase", "https://supabase.com"], ["Claude", "https://www.anthropic.com/claude"], ["PostgreSQL", "https://www.postgresql.org"]] },
 ];
 
-function Footer() {
+export function Footer() {
   return (
     <footer className="l-foot">
       <div className="top">
@@ -533,6 +535,12 @@ export default function Landing() {
     return () => lenis.destroy();
   }, [reduced]);
   useEffect(() => { document.title = "FinMCP · money that answers back"; }, []);
+  const { hash } = useLocation();
+  useEffect(() => { // arriving from another page at /#story and the like
+    if (!hash) return;
+    const t = window.setTimeout(() => document.querySelector(hash)?.scrollIntoView({ behavior: "smooth" }), 120);
+    return () => window.clearTimeout(t);
+  }, [hash]);
   return (
     <div className="landing">
       <Nav signedIn={signedIn} />
@@ -541,10 +549,9 @@ export default function Landing() {
       <Reveal accent={["open", "protocol", "Claude", "permission"]} text="Most finance apps keep your money behind their own screens. FinMCP puts your ledger behind an open protocol, so this app, Claude and any tool you trust can read it, write to it and ask about it, only with your permission." />
       <Story />
       <McpTrack />
-      <Clients />
+      <Clients signedIn={signedIn} />
       <Security />
       <BigCta signedIn={signedIn} />
-      <Faq />
       <Footer />
       <FloatingCta signedIn={signedIn} />
     </div>

@@ -10,7 +10,9 @@
         "api.main:app",
         "--port",
         "8000",
-        "--reload"
+        "--reload",
+        "--reload-include",
+        ".env"
       ],
       "port": 8000
     },

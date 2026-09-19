@@ -1,4 +1,6 @@
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { initials } from "../lib/format";
 
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -109,16 +111,24 @@ export function Sheet({ open, onClose, title, sub, children, actions }: { open: 
     document.body.style.overflow = "hidden";
     return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
   }, [open, onClose]);
-  if (!open) return null;
-  return (
-    <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label={title}>
-        <h2>{title}</h2>
-        {sub ? <div className="sub">{sub}</div> : null}
-        {children}
-        {actions ? <div className="actions">{actions}</div> : null}
-      </div>
-    </div>
+  // Rendered at the document root: inside an animating page, `position: fixed` would pin to that page, not the screen.
+  return createPortal(
+    <AnimatePresence>
+      {open ? (
+        <motion.div key="sheet" className="sheet-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+          <motion.div className="sheet" role="dialog" aria-modal="true" aria-label={title}
+            initial={{ opacity: 0, y: 28, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}>
+            <h2>{title}</h2>
+            {sub ? <div className="sub">{sub}</div> : null}
+            {children}
+            {actions ? <div className="actions">{actions}</div> : null}
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>,
+    document.body,
   );
 }
 
@@ -156,10 +166,10 @@ export function ClientPill({ name }: { name: string | null | undefined }) {
 export type IconName =
   | "home" | "list" | "budget" | "goal" | "repeat" | "chat" | "upload" | "plug" | "activity" | "settings" | "send" | "trash" | "refresh" | "wand"
   | "x" | "plus" | "search" | "arrowRight" | "arrowUp" | "arrowDown" | "check" | "enter" | "undo" | "spark" | "logo" | "copy" | "key" | "menu"
-  | "download" | "edit" | "shield" | "bolt" | "calendar" | "more";
+  | "download" | "edit" | "shield" | "bolt" | "calendar" | "more" | "logout" | "user";
 
 export function Icon({ name, className }: { name: IconName; className?: string }) {
-  const common = { className, fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, viewBox: "0 0 24 24", "aria-hidden": true };
+  const common = { className, width: "1em", height: "1em", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, viewBox: "0 0 24 24", "aria-hidden": true };
   switch (name) {
     case "home": return <svg {...common}><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z" /></svg>;
     case "list": return <svg {...common}><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" /></svg>;
@@ -185,7 +195,7 @@ export function Icon({ name, className }: { name: IconName; className?: string }
     case "enter": return <svg {...common}><path d="M20 6v6a2 2 0 0 1-2 2H5M8 10l-4 4 4 4" /></svg>;
     case "undo": return <svg {...common}><path d="M9 14L4 9l5-5M4 9h9a6 6 0 0 1 0 12h-2" /></svg>;
     case "spark": return <svg {...common}><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 17l.7 2.3L22 20l-2.3.7L19 23l-.7-2.3L16 20l2.3-.7z" /></svg>;
-    case "logo": return <svg {...common} strokeWidth={2.2}><path d="M5 17l4-6 4 3 6-8" /><path d="M15 6h4v4" /></svg>;
+    case "logo": return <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}><rect x="5" y="4" width="4" height="16" rx="2" /><rect x="5" y="4" width="14" height="4" rx="2" /><rect x="5" y="10.5" width="8" height="4" rx="2" /><circle cx="17" cy="12.5" r="2" /></svg>;
     case "copy": return <svg {...common}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>;
     case "key": return <svg {...common}><circle cx="8" cy="14" r="4" /><path d="M11 11l9-9M15 7l3 3M18 4l2 2" /></svg>;
     case "menu": return <svg {...common}><path d="M4 7h16M4 12h16M4 17h16" /></svg>;
@@ -194,6 +204,8 @@ export function Icon({ name, className }: { name: IconName; className?: string }
     case "shield": return <svg {...common}><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /><path d="M9 12l2 2 4-4" /></svg>;
     case "bolt": return <svg {...common}><path d="M13 2L4 14h7l-1 8 9-12h-7z" /></svg>;
     case "calendar": return <svg {...common}><rect x="4" y="5" width="16" height="15" rx="3" /><path d="M4 10h16M8 3v4M16 3v4" /></svg>;
+    case "logout": return <svg {...common}><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10" /></svg>;
+    case "user": return <svg {...common}><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>;
     case "more": return <svg {...common}><circle cx="5" cy="12" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="19" cy="12" r="1.2" /></svg>;
   }
 }

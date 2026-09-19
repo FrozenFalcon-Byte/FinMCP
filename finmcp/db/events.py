@@ -17,11 +17,14 @@ class LedgerEvents:
         self._subs: dict[str, set[tuple[asyncio.AbstractEventLoop, asyncio.Queue[dict[str, Any]]]]] = {}
         self._lock = threading.Lock()
         self.count = 0
+        self._versions: dict[str, int] = {}
 
     def emit(self, user_id: str, **event: Any) -> None:
         payload = {"ts": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), **event}
         with self._lock:
             self.count += 1
+            if event.get("type") == "write":
+                self._versions[user_id] = self._versions.get(user_id, 0) + 1
             targets = list(self._subs.get(user_id, ()))
         for loop, queue in targets:
             with contextlib.suppress(RuntimeError):  # loop closed
@@ -43,6 +46,11 @@ class LedgerEvents:
                     subs.discard(key)
                     if not subs:
                         self._subs.pop(user_id, None)
+
+    def version(self, user_id: str) -> int:
+        """Bumps on every write to the account from this process; read caches compare it to know they are stale."""
+        with self._lock:
+            return self._versions.get(user_id, 0)
 
     def subscribers(self, user_id: str | None = None) -> int:
         with self._lock:

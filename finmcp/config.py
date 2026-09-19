@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import secrets
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,8 +38,9 @@ class Settings:
     public_url: str
     model: str
     currency: str
-    llm_mode: str  # auto | anthropic | rules
-    api_key_present: bool
+    llm_mode: str  # auto | openrouter | anthropic | rules
+    api_key_present: bool  # some model backend has a key
+    llm_backend: str  # openrouter | anthropic | none: which one the model calls go to
     fallbacks: bool
     seed_if_empty: bool
     pg_port: int
@@ -48,7 +50,7 @@ class Settings:
     def use_llm(self) -> bool:
         if self.llm_mode == "rules":
             return False
-        if self.llm_mode == "anthropic":
+        if self.llm_mode in {"anthropic", "openrouter"}:
             return True
         return self.api_key_present
 
@@ -79,11 +81,17 @@ def load_settings(**overrides: object) -> Settings:
     load_dotenv(ROOT / ".env", override=False)
     env = os.environ
     llm_mode = str(overrides.get("llm_mode") or env.get("FINMCP_LLM", "auto")).lower()
-    if llm_mode not in {"auto", "anthropic", "rules"}:
+    if llm_mode not in {"auto", "openrouter", "anthropic", "rules"}:
         llm_mode = "auto"
-    key_present = bool(env.get("ANTHROPIC_API_KEY") or env.get("ANTHROPIC_AUTH_TOKEN"))
+    anthropic_key = bool(env.get("ANTHROPIC_API_KEY") or env.get("ANTHROPIC_AUTH_TOKEN"))
+    openrouter_key = bool((env.get("OPENROUTER_API_KEY") or "").strip())
+    key_present = anthropic_key or openrouter_key
+    # OpenRouter wins when its key is set, unless FINMCP_LLM names a backend explicitly.
+    backend = llm_mode if llm_mode in {"openrouter", "anthropic"} else ("openrouter" if openrouter_key else "anthropic" if anthropic_key else "none")
+    from .llm.openrouter import DEFAULT_MODEL as OPENROUTER_DEFAULT
     data_dir = Path(str(overrides.get("data_dir") or env.get("FINMCP_DATA_DIR") or DATA_DIR))
-    supabase_url = (str(overrides.get("supabase_url") or env.get("SUPABASE_URL") or "")).strip().rstrip("/") or None
+    # The project URL only: people often paste the REST endpoint (https://x.supabase.co/rest/v1/) from the dashboard.
+    supabase_url = re.sub(r"/(rest|auth|storage|realtime|functions)/v1.*$", "", str(overrides.get("supabase_url") or env.get("SUPABASE_URL") or "").strip().rstrip("/")) or None
     providers = tuple(p.strip().lower() for p in str(env.get("SUPABASE_OAUTH_PROVIDERS", "")).split(",") if p.strip())
     return Settings(
         database_url=str(overrides.get("database_url") or env.get("FINMCP_DATABASE_URL") or env.get("SUPABASE_DB_URL") or "") or None,
@@ -94,10 +102,11 @@ def load_settings(**overrides: object) -> Settings:
         oauth_providers=providers,
         jwt_secret=_local_jwt_secret(data_dir, str(overrides.get("jwt_secret") or env.get("FINMCP_JWT_SECRET") or "") or None),
         public_url=str(overrides.get("public_url") or env.get("FINMCP_PUBLIC_URL") or "http://127.0.0.1:8000").rstrip("/"),
-        model=str(overrides.get("model") or env.get("FINMCP_MODEL") or "claude-opus-5"),
+        model=str(overrides.get("model") or (env.get("OPENROUTER_MODEL") or OPENROUTER_DEFAULT if backend == "openrouter" else env.get("FINMCP_MODEL") or "claude-opus-5")),
         currency=str(overrides.get("currency") or env.get("FINMCP_CURRENCY") or "INR"),
         llm_mode=llm_mode,
         api_key_present=key_present,
+        llm_backend=backend,
         fallbacks=_truthy(str(overrides.get("fallbacks", env.get("FINMCP_FALLBACKS", "1"))), True),
         seed_if_empty=bool(overrides.get("seed_if_empty", _truthy(env.get("FINMCP_SEED_IF_EMPTY")))),
         pg_port=int(str(overrides.get("pg_port") or env.get("FINMCP_PG_PORT") or "54329")),

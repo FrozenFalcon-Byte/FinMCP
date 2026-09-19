@@ -6,6 +6,7 @@
     <meta name="color-scheme" content="light" />
     <meta name="theme-color" content="#F4F5F7" />
     <meta name="description" content="FinMCP: a personal finance tracker whose brain is an MCP server. Track money in a calm app, and let any AI assistant you already use read and write the same ledger." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>FinMCP</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -13,6 +14,9 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Boot veil: the page's own background colour until the app has loaded (components/Curtain.tsx takes over). -->
+    <div id="boot" aria-busy="true" style="position:fixed;inset:0;z-index:1001;background:#fff"></div>
+    <script>if (location.pathname.indexOf("/app") === 0) document.getElementById("boot").style.background = "#f4f5f7";</script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -136,7 +136,7 @@
 .l-reveal .hl > span { color: var(--b); }
 
 /* ------------------------------------------------------------ pinned story */
-.l-story { height: 420vh; position: relative; }
+.l-story { height: 420vh; position: relative; background: var(--b); }
 .l-story .sticky { position: sticky; top: 0; height: 100vh; max-width: 1180px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 60px; }
 .l-story .chaps { display: flex; flex-direction: column; gap: 22px; position: relative; padding-left: 28px; color: #fff; }
 .l-story .kicker { color: rgba(255, 255, 255, .7); }
@@ -149,33 +149,17 @@
 .story-phone { height: min(660px, 80vh); width: min(330px, 40vh); box-shadow: 0 50px 120px rgba(10, 6, 80, .5), 0 0 0 2px #2b2b2b inset; }
 
 /* ------------------------------------------------------------ MCP horizontal track */
-.l-mcp { position: relative; background: var(--navy); color: #fff; }
+.l-mcp { position: relative; background: #fff; color: var(--ink); }
 .l-mcp .sticky { position: sticky; top: 0; height: 100vh; overflow: hidden; display: flex; flex-direction: column; justify-content: center; gap: 44px; }
 .l-mcp .head { max-width: 1180px; margin: 0 auto; padding: 0 24px; width: 100%; }
 .l-mcp h2 { font-size: clamp(40px, 6vw, 84px); line-height: .95; }
-.l-mcp .head p { color: rgba(255, 255, 255, .7); font-size: 18px; max-width: 620px; margin-top: 18px; line-height: 1.55; }
+.l-mcp .head p { color: var(--mute); font-size: 18px; max-width: 620px; margin-top: 18px; line-height: 1.55; }
 .l-mcp .track { display: flex; gap: 20px; padding: 0 24px 0 max(24px, calc((100vw - 1180px) / 2 + 24px)); width: max-content; }
-.l-mcp .card { box-shadow: none; width: 320px; min-height: 300px; border-radius: 30px; padding: 28px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1); display: flex; flex-direction: column; gap: 12px; }
-.l-mcp .card:nth-child(4n + 1) { background: var(--b); border-color: var(--b); }
-.l-mcp .card:nth-child(4n + 3) { background: #fff; color: var(--ink); }
-.l-mcp .card:nth-child(4n + 3) p, .l-mcp .card:nth-child(4n + 3) .idx { color: var(--mute); }
-.l-mcp .card .n { font: 800 64px/1 var(--disp); letter-spacing: -.03em; }
-.l-mcp .card h3 { font-size: 30px; }
-.l-mcp .card p { color: rgba(255, 255, 255, .75); line-height: 1.5; }
-.l-mcp .card .idx { margin-top: auto; font: 500 12px "JetBrains Mono", ui-monospace, monospace; color: rgba(255, 255, 255, .5); }
 
 /* ------------------------------------------------------------ clients + stats */
 .l-clients { max-width: 1180px; margin: 0 auto; padding: 150px 24px 120px; }
-.l-clients h2, .l-secure h2, .l-faq h2 { font-size: clamp(40px, 6vw, 80px); line-height: .95; }
+.l-clients h2, .l-secure h2 { font-size: clamp(40px, 6vw, 80px); line-height: .95; }
 .l-clients .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 50px; }
-.l-clients .tile { border-radius: 26px; padding: 22px; background: var(--tint); display: flex; flex-direction: column; gap: 8px; min-height: 180px; }
-.l-clients .tile:first-child { background: var(--b); color: #fff; }
-.l-clients .tile:first-child small { color: rgba(255, 255, 255, .8); }
-.l-clients .tile .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--b); margin-bottom: auto; }
-.l-clients .tile:first-child .dot { background: var(--sun); }
-.l-clients .tile b { font: 700 22px var(--disp); }
-.l-clients .tile small { color: var(--mute); font-size: 14px; line-height: 1.4; }
-.l-clients .snippet { margin: 22px 0 0; padding: 20px 24px; border-radius: 22px; background: var(--ink); color: #d8d6ff; font: 500 14px/1.6 "JetBrains Mono", ui-monospace, monospace; overflow-x: auto; }
 .l-clients .stats { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 90px; border-top: 1.5px solid var(--edge); }
 .l-clients .stat { padding: 28px 20px 0 0; display: flex; flex-direction: column; gap: 6px; }
 .l-clients .stat b { font: 800 clamp(48px, 6vw, 80px)/1 var(--disp); color: var(--b); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
@@ -192,7 +176,7 @@
 .l-secure p { color: var(--mute); line-height: 1.5; }
 
 /* ------------------------------------------------------------ big CTA */
-.l-cta { padding: 120px 16px; }
+.l-cta { padding: 120px 16px 140px; }
 .l-cta .panel { max-width: 1240px; margin: 0 auto; background: var(--b); color: #fff; padding: 110px 40px; text-align: center; position: relative; overflow: hidden; }
 .l-cta h2 { font-size: clamp(42px, 7vw, 104px); line-height: .92; letter-spacing: -.04em; position: relative; z-index: 1; }
 .l-cta p { max-width: 520px; margin: 24px auto 34px; font-size: 18px; opacity: .85; position: relative; z-index: 1; }
@@ -202,18 +186,6 @@
 .l-cta .k2 { width: 64px; height: 64px; right: 9%; top: 20%; background: var(--coral); animation: bob 7s ease-in-out infinite reverse; }
 .l-cta .k3 { width: 200px; height: 200px; right: -50px; bottom: -70px; background: var(--b3); animation: bob 9s ease-in-out infinite; }
 @keyframes bob { 50% { transform: translateY(-18px) rotate(8deg); } }
-
-/* ------------------------------------------------------------ FAQ */
-.l-faq { max-width: 900px; margin: 0 auto; padding: 40px 24px 140px; }
-.l-faq h2 { text-align: center; margin-bottom: 44px; }
-.l-faq .list { display: flex; flex-direction: column; gap: 12px; }
-.l-faq .qa { border: 1.5px solid var(--edge); border-radius: 24px; transition: border-color .25s, background .25s; }
-.l-faq .qa.open { border-color: var(--b); background: #fbfbff; }
-.l-faq button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 24px; background: none; border: 0; font: 700 clamp(17px, 1.6vw, 20px) "Figtree", system-ui, sans-serif; color: var(--ink); text-align: left; cursor: pointer; }
-.l-faq .chev { width: 38px; height: 38px; flex: none; border-radius: 50%; background: var(--b); color: #fff; display: grid; place-items: center; }
-.l-faq .chev svg { width: 18px; height: 18px; }
-.l-faq .a { overflow: hidden; }
-.l-faq .a p { padding: 0 24px 24px; color: var(--mute); font-size: 16px; line-height: 1.6; max-width: 720px; }
 
 /* ------------------------------------------------------------ footer */
 .l-foot { background: var(--navy); color: #fff; padding: 80px 24px 30px; overflow: hidden; }
@@ -269,8 +241,7 @@
   .l-story .chap p { font-size: 15px; }
   .l-story .kicker { margin-bottom: 4px; }
   .story-phone { justify-self: center; transform-origin: top center; width: 240px; height: 480px; }
-  .l-mcp .card { width: 270px; min-height: 270px; padding: 22px; }
-  .l-mcp .card .n { font-size: 50px; }
+  .p-card { width: 280px; min-height: 360px; padding: 22px; }
   .l-mcp .head p { font-size: 16px; }
   .l-mcp .sticky { gap: 28px; }
   .l-clients { padding: 100px 20px 90px; }
@@ -291,3 +262,94 @@
   .l-tape .run, .l-cta .coin, .typing { animation: none; }
   .typing { width: auto; }
 }
+
+/* ---- nav: live MCP link, and the public /mcp page ---- */
+.l-nav .links .live-link { display: inline-flex; align-items: center; gap: 8px; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 0 rgba(34, 197, 94, .5); animation: l-live 1.8s infinite; }
+@keyframes l-live { 70% { box-shadow: 0 0 0 7px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+
+
+/* ---- "One ledger. Every assistant.": clickable primitive cards ---- */
+.l-mcp .sticky { isolation: isolate; }
+.l-mcp .accent { color: var(--b); }
+.p-card {
+  position: relative; width: 340px; min-height: 400px; border-radius: 30px; padding: 26px; display: flex; flex-direction: column; gap: 18px;
+  text-decoration: none; color: #fff; background: var(--navy); border: 1px solid transparent;
+  transition: transform .45s cubic-bezier(.22, 1, .36, 1), box-shadow .45s, border-color .3s; will-change: transform;
+}
+.p-card:hover { transform: translateY(-10px) rotate(-.6deg); box-shadow: 0 30px 60px -24px rgba(27, 27, 60, .35); }
+.p-card:focus-visible { outline: 3px solid var(--b); outline-offset: 4px; }
+.p-card.blue { background: linear-gradient(160deg, #5b52ff, #4d43fe 55%, #3a31e0); border-color: transparent; }
+.p-card.paper { background: #fff; color: var(--ink); border-color: var(--edge); box-shadow: 0 10px 30px -18px rgba(27, 27, 60, .25); }
+.p-card.sun { background: #ffd84d; color: #1b1b1b; border-color: transparent; }
+.p-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.p-idx { font: 600 12px "JetBrains Mono", ui-monospace, monospace; opacity: .6; }
+.p-method { font: 500 12px "JetBrains Mono", ui-monospace, monospace; padding: 5px 10px; border-radius: 999px; background: rgba(255, 255, 255, .14); }
+.p-card.paper .p-method, .p-card.sun .p-method { background: rgba(0, 0, 0, .07); }
+.p-body { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+.p-body h3 { font-size: 30px; display: flex; align-items: baseline; gap: 10px; }
+.p-n { font: 800 44px/1 var(--disp); letter-spacing: -.03em; }
+.p-body p { font-size: 15px; line-height: 1.5; opacity: .78; }
+.p-go { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; opacity: .85; }
+.p-go svg { width: 16px; height: 16px; transition: transform .3s; }
+.p-card:hover .p-go svg { transform: translateX(5px); }
+.p-progress { max-width: 1180px; width: calc(100% - 48px); margin: 0 auto; height: 3px; border-radius: 3px; background: var(--edge); overflow: hidden; }
+.p-progress span { display: block; height: 100%; background: var(--b); }
+
+/* the little on-the-wire pictures */
+.viz { border-radius: 18px; padding: 14px; background: rgba(0, 0, 0, .18); display: flex; flex-direction: column; gap: 8px; font-size: 13px; min-height: 112px; justify-content: center; }
+.p-card.paper .viz, .p-card.sun .viz { background: rgba(0, 0, 0, .06); }
+.viz code { font: 500 12.5px "JetBrains Mono", ui-monospace, monospace; }
+.viz.call code { font-size: 14px; font-weight: 600; }
+.viz.call .arg { font: 12px "JetBrains Mono", ui-monospace, monospace; opacity: .8; }
+.viz.call .arg i { font-style: normal; color: #ffd84d; }
+.viz .ok, .viz.roots span { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.viz .ok { align-self: flex-start; padding: 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, .92); color: #3a31e0; }
+.viz svg { width: 14px; height: 14px; }
+.viz.uris code { display: flex; align-items: center; gap: 8px; }
+.viz.chips { flex-direction: row; flex-wrap: wrap; align-content: center; }
+.viz.chips span { padding: 6px 11px; border-radius: 999px; background: var(--ink); color: #fff; font: 500 12px "JetBrains Mono", ui-monospace, monospace; }
+.viz.relay { flex-direction: row; align-items: center; }
+.viz.relay .node { padding: 8px 12px; border-radius: 12px; background: #1b1b1b; color: #fff; font-weight: 700; font-size: 12px; white-space: nowrap; }
+.viz.relay .wire { flex: 1; height: 2px; background: rgba(0, 0, 0, .25); position: relative; }
+.viz.relay .wire i { position: absolute; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: #4d43fe; animation: p-relay 1.8s cubic-bezier(.65, 0, .35, 1) infinite alternate; }
+@keyframes p-relay { from { left: 0; } to { left: calc(100% - 10px); } }
+.viz.ask .q { line-height: 1.4; }
+.viz.ask .btns { display: flex; gap: 8px; }
+.viz.ask .btns span { padding: 6px 12px; border-radius: 10px; background: rgba(255, 255, 255, .12); font-weight: 600; font-size: 12px; }
+.viz.ask .btns .on { background: #ffd84d; color: #1b1b1b; }
+.viz.roots .yes { color: #b6ffcf; }
+.viz.roots .no { color: #ffb4b4; text-decoration: line-through; }
+.viz.pulse { flex-direction: row; align-items: center; gap: 14px; }
+.viz.pulse .ring { width: 14px; height: 14px; border-radius: 50%; background: #22c55e; animation: l-live 1.6s infinite; flex: none; }
+.viz.complete .field { padding: 8px 12px; border-radius: 10px; background: #fff; color: #1b1b1b; font: 500 13px "JetBrains Mono", ui-monospace, monospace; display: flex; align-items: center; }
+.viz.complete .field i { width: 1.5px; height: 15px; background: #1b1b1b; margin-left: 2px; animation: p-caret 1s steps(1) infinite; }
+@keyframes p-caret { 50% { opacity: 0; } }
+.viz.complete .opts { display: flex; gap: 6px; font: 500 12px "JetBrains Mono", ui-monospace, monospace; }
+.viz.complete .opts span { padding: 4px 8px; border-radius: 8px; background: rgba(0, 0, 0, .08); }
+.viz.complete .opts .on { background: #1b1b1b; color: #fff; }
+
+/* ---- "Connect once": client tiles pick the setup shown below ---- */
+.l-clients .tile {
+  appearance: none; border: 0; text-align: left; font: inherit; cursor: pointer; border-radius: 26px; padding: 22px; background: var(--tint); color: var(--ink);
+  display: flex; flex-direction: column; gap: 8px; min-height: 180px; transition: background .3s, color .3s, box-shadow .3s;
+}
+.l-clients .tile:hover { box-shadow: 0 18px 40px -18px rgba(77, 67, 254, .45); }
+.l-clients .tile:focus-visible { outline: 3px solid var(--b); outline-offset: 3px; }
+.l-clients .tile.on { background: var(--b); color: #fff; box-shadow: 0 22px 50px -18px rgba(77, 67, 254, .7); }
+.l-clients .tile .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--b); margin-bottom: auto; transition: background .3s; }
+.l-clients .tile.on .dot { background: var(--sun); }
+.l-clients .tile b { font: 700 22px var(--disp); }
+.l-clients .tile small { color: var(--mute); font-size: 14px; line-height: 1.4; }
+.l-clients .tile.on small { color: rgba(255, 255, 255, .82); }
+.l-clients .setup { margin-top: 22px; border-radius: 24px; background: var(--ink); color: #fff; padding: 20px 24px; }
+.l-clients .setup-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 14px; color: rgba(255, 255, 255, .72); }
+.l-clients .copy { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .12); color: #fff; font: 600 13px Figtree, sans-serif; cursor: pointer; }
+.l-clients .copy:hover { background: rgba(255, 255, 255, .22); }
+.l-clients .copy svg { width: 14px; height: 14px; }
+.l-clients .snippet { margin: 14px 0 12px; padding: 0; background: none; color: #d8d6ff; font: 500 14px/1.6 "JetBrains Mono", ui-monospace, monospace; overflow-x: auto; white-space: pre; }
+.l-clients .setup-foot { font-size: 13px; color: rgba(255, 255, 255, .55); }
+.l-clients .setup-foot a { color: #ffd84d; }
+.l-clients .setup-app { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.l-clients .setup-app p { max-width: 620px; color: rgba(255, 255, 255, .8); line-height: 1.55; }
+@media (max-width: 760px) { .p-card { width: 290px; min-height: 380px; } .p-body h3 { font-size: 26px; } }

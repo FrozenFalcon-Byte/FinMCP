@@ -176,6 +176,25 @@ class AccountStore:
             return None
         return self.upsert_profile(str(row["id"]), row["email"], row["name"])
 
+    def local_password_state(self, *, email: str | None = None, user_id: str | None = None) -> tuple[str, str] | None:
+        """(user id, password hash) for a local account, looked up by email or id."""
+        with self.db.admin() as conn:
+            if user_id is not None:
+                row = conn.execute("SELECT id, password_hash FROM local_users WHERE id = %s", (user_id,)).fetchone()
+            else:
+                row = conn.execute("SELECT id, password_hash FROM local_users WHERE email = %s", (normalize_email(email or ""),)).fetchone()
+        return (str(row["id"]), row["password_hash"]) if row else None
+
+    def set_local_password(self, user_id: str, password: str) -> Profile:
+        if len(password) < MIN_PASSWORD:
+            raise ValueError(f"Password must be at least {MIN_PASSWORD} characters.")
+        with self.db.admin() as conn:
+            row = conn.execute("UPDATE local_users SET password_hash = %s WHERE id = %s RETURNING email, name",
+                               (hash_password(password), user_id)).fetchone()
+        if row is None:
+            raise ValueError("That account no longer exists.")
+        return self.upsert_profile(user_id, row["email"], row["name"])
+
     def count_local_users(self) -> int:
         with self.db.admin() as conn:
             return int(conn.execute("SELECT COUNT(*) AS n FROM local_users").fetchone()["n"])  # type: ignore[index]

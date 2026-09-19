@@ -17,7 +17,7 @@ const CLIENTS: { id: Client; label: string }[] = [
   { id: "stdio", label: "Local process" },
 ];
 
-function snippet(client: Client, endpoint: string, token: string): string {
+export function snippet(client: Client, endpoint: string, token: string): string {
   const t = token || "fm_YOUR_TOKEN";
   switch (client) {
     case "claude-desktop":
@@ -33,7 +33,7 @@ function snippet(client: Client, endpoint: string, token: string): string {
   }
 }
 
-const NOTES: Record<Client, string> = {
+export const NOTES: Record<Client, string> = {
   "claude-desktop": "Settings → Developer → Edit Config, paste into claude_desktop_config.json, restart Claude Desktop. Needs Node (npx).",
   "claude-code": "Run once in a terminal. Then ask Claude Code about your money from any project.",
   cursor: "Cursor Settings → MCP → Add new global MCP server, paste into mcp.json.",
