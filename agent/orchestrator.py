@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -32,11 +33,16 @@ class Conversation:
 
 class Agent:
     def __init__(self, connection: MCPConnection, driver: ModelDriver, *, currency: str = "INR",
-                 max_iterations: int = 12, tool_result_max_chars: int = 60000):
+                 max_iterations: int = 12, tool_rounds: int = 4, time_budget_s: float = 60.0,
+                 tool_result_max_chars: int = 24000):
         self.connection = connection
         self.driver = driver
         self.currency = currency
         self.max_iterations = max_iterations
+        # Some models keep reaching for "one more" tool call. After this many rounds, or this long, the model is asked
+        # to answer from what it already has (tools switched off for that turn), so a question never runs for minutes.
+        self.tool_rounds = tool_rounds
+        self.time_budget_s = time_budget_s
         self.tool_result_max_chars = tool_result_max_chars
         self.conversations: dict[str, Conversation] = {}
         self.system: str = ""
@@ -110,12 +116,14 @@ class Agent:
         usage_total: dict[str, int] = {}
         replied = False
 
+        started = time.monotonic()
         while iterations < self.max_iterations:
             iterations += 1
             final: DriverFinal | None = None
             turn_text: list[str] = []
+            answer_now = iterations > self.tool_rounds or time.monotonic() - started > self.time_budget_s
             try:
-                async for ev in self.driver.stream(system=self.system, messages=conv.messages, tools=self.tools):
+                async for ev in self.driver.stream(system=self.system, messages=conv.messages, tools=self.tools, answer_now=answer_now):
                     if ev["type"] == "text_delta":
                         turn_text.append(ev["text"])
                         yield events.text_delta(ev["text"])
@@ -141,6 +149,15 @@ class Agent:
                 if isinstance(v, int):
                     usage_total[k] = usage_total.get(k, 0) + v
 
+            if final.stop_reason == "tool_use" and answer_now:
+                # Asked to answer but still reached for a tool: keep only what it said, so the history stays valid.
+                said = [b for b in final.content if b.get("type") == "text" and b.get("text", "").strip()]
+                if said:
+                    conv.messages[-1] = {"role": "assistant", "content": said}
+                else:
+                    conv.messages.pop()
+                    yield events.error("The model kept asking for more data instead of answering. Try a narrower question.")
+                break
             if final.stop_reason == "tool_use":
                 tool_uses = [b for b in final.content if b.get("type") == "tool_use"]
                 results: list[dict[str, Any]] = []

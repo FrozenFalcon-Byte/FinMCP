@@ -44,6 +44,15 @@ class GoalPatch(BaseModel):
     icon: str | None = Field(default=None, max_length=8)
 
 
+class EmiBody(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    amount: float = Field(gt=0)
+    start_date: str
+    tenure_months: int = Field(ge=1, le=480)
+    lender: str | None = Field(default=None, max_length=80)
+    principal: float | None = Field(default=None, gt=0)
+
+
 class GoalAdd(BaseModel):
     amount: float
 
@@ -72,6 +81,26 @@ async def update_goal(goal_id: int, body: GoalPatch, ctx: AppContext = Depends(g
         if v is not None:
             args[k] = v
     return await call_tool(ctx, "upsert_goal", args)
+
+
+@router.get("/emis")
+async def emis(ctx: AppContext = Depends(get_ctx)) -> Any:
+    return await call_tool(ctx, "list_emis", {})
+
+
+@router.post("/emis", status_code=201)
+async def create_emi(body: EmiBody, ctx: AppContext = Depends(get_ctx)) -> Any:
+    return await call_tool(ctx, "upsert_emi", body.model_dump(exclude_none=True))
+
+
+@router.put("/emis/{emi_id}")
+async def update_emi(emi_id: int, body: EmiBody, ctx: AppContext = Depends(get_ctx)) -> Any:
+    return await call_tool(ctx, "upsert_emi", {**body.model_dump(exclude_none=True), "emi_id": emi_id})
+
+
+@router.delete("/emis/{emi_id}")
+async def delete_emi(emi_id: int, ctx: AppContext = Depends(get_ctx)) -> Any:
+    return await call_tool(ctx, "delete_emi", {"emi_id": emi_id})
 
 
 @router.post("/goals/{goal_id}/add")

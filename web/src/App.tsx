@@ -8,7 +8,7 @@ import { SignOutButton } from "./components/SignOut";
 import { ToastProvider } from "./components/Toast";
 import { Avatar, Chip, Icon, Sheet, type IconName } from "./components/ui";
 import { AuthProvider, useAuth } from "./lib/auth";
-import { LedgerProvider, useLedger } from "./lib/ledger";
+import { LedgerProvider } from "./lib/ledger";
 import { StatusProvider, useStatus } from "./lib/status";
 import { surface } from "./lib/surface";
 import Activity from "./screens/Activity";
@@ -16,6 +16,7 @@ import AuthScreen, { AuthLayout } from "./screens/Auth";
 import Budgets from "./screens/Budgets";
 import Chat from "./screens/Chat";
 import Connect from "./screens/Connect";
+import Emis from "./screens/Emis";
 import Goals from "./screens/Goals";
 import Home from "./screens/Home";
 import Import from "./screens/Import";
@@ -33,6 +34,7 @@ const NAV: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: "/app/budgets", label: "Budgets", icon: "budget" },
   { to: "/app/goals", label: "Goals", icon: "goal" },
   { to: "/app/subscriptions", label: "Subscriptions", icon: "repeat" },
+  { to: "/app/emis", label: "EMIs", icon: "calendar" },
   { to: "/app/ask", label: "Ask", icon: "chat" },
   { to: "/app/import", label: "Import", icon: "upload" },
   { to: "/app/mcp", label: "MCP live", icon: "bolt" },
@@ -43,15 +45,6 @@ const NAV_2: { to: string; label: string; icon: IconName }[] = [
   { to: "/app/profile", label: "Profile", icon: "user" },
   { to: "/app/settings", label: "Settings", icon: "settings" },
 ];
-
-function LiveIndicator() {
-  const { live } = useLedger();
-  return (
-    <div className={`live ${live ? "" : "off"}`} title="Changes made through Claude Desktop, the CLI or another tab show up here as they happen.">
-      <span className="pulse" />{live ? "Live" : "Reconnecting…"}
-    </div>
-  );
-}
 
 function EngineChip() {
   const { health, error } = useStatus();
@@ -81,7 +74,6 @@ function Sidebar() {
         {NAV_2.map((n) => <NavLink key={n.to} to={n.to}>{({ isActive }) => <>{isActive ? <NavPill /> : null}<Icon name={n.icon} />{n.label}</>}</NavLink>)}
       </nav>
       <div className="foot">
-        <LiveIndicator />
         {user ? (
           <div className="account-box">
             <Link to="/app/profile" className="account" title="Your profile">
@@ -99,7 +91,7 @@ function Sidebar() {
 function TabBar() {
   const [more, setMore] = useState(false);
   const location = useLocation();
-  const moreActive = ["/app/goals", "/app/subscriptions", "/app/import", "/app/mcp", "/app/connect", "/app/activity", "/app/profile", "/app/settings"].some((p) => location.pathname.startsWith(p));
+  const moreActive = ["/app/goals", "/app/subscriptions", "/app/emis", "/app/import", "/app/mcp", "/app/connect", "/app/activity", "/app/profile", "/app/settings"].some((p) => location.pathname.startsWith(p));
   return (
     <>
       <nav className="tabbar">
@@ -111,7 +103,7 @@ function TabBar() {
       </nav>
       <Sheet open={more} onClose={() => setMore(false)} title="More">
         <div className="nav">
-          {[...NAV.slice(3, 5), ...NAV.slice(6), ...NAV_2].map((n) => <NavLink key={n.to} to={n.to} onClick={() => setMore(false)}><Icon name={n.icon} />{n.label}</NavLink>)}
+          {[...NAV.slice(3, 6), ...NAV.slice(7), ...NAV_2].map((n) => <NavLink key={n.to} to={n.to} onClick={() => setMore(false)}><Icon name={n.icon} />{n.label}</NavLink>)}
         </div>
         <SignOutButton className="btn block signout" onDone={() => setMore(false)} />
       </Sheet>
@@ -150,6 +142,7 @@ function Shell() {
                 <Route path="budgets" element={<Budgets />} />
                 <Route path="goals" element={<Goals />} />
                 <Route path="subscriptions" element={<Subscriptions />} />
+                <Route path="emis" element={<Emis />} />
                 <Route path="ask" element={<Chat />} />
                 <Route path="chat" element={<Navigate to="/app/ask" replace />} />
                 <Route path="import" element={<Import />} />

@@ -16,7 +16,18 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_MODEL = "anthropic/claude-haiku-4.5"
+# Free models (no credits needed) that call tools well and answer quickly (reasoning models such as the free DeepSeek
+# spend minutes thinking before each tool call). Free models are rate-limited upstream at busy times, so a free primary
+# gets the others as fallbacks: OpenRouter moves to the next one when a model is unavailable.
+DEFAULT_MODEL = "google/gemma-4-31b-it:free"
+FREE_FALLBACKS = ("nvidia/nemotron-3-super-120b-a12b:free", "google/gemma-4-26b-a4b-it:free")
+
+
+def route(model: str) -> dict[str, Any]:
+    """The model fields of a request body: the model itself, plus free fallbacks when it is a free model."""
+    if not model.endswith(":free"):
+        return {"model": model}
+    return {"model": model, "models": [model, *(m for m in FREE_FALLBACKS if m != model)][:3]}
 
 
 def api_key() -> str | None:
@@ -128,7 +139,7 @@ def complete_json(*, model: str, system: str, user: Any, output: type[BaseModel]
     """One non-streaming completion that must come back as a JSON object matching `output`."""
     schema = json.dumps(output.model_json_schema())
     body = {
-        "model": model, "max_tokens": max_tokens, "temperature": 0,
+        **route(model), "max_tokens": max_tokens, "temperature": 0,
         "messages": [{"role": "system", "content": f"{system}\n\nReply with exactly one JSON object matching this JSON schema and nothing else:\n{schema}"},
                      {"role": "user", "content": to_parts(user)}],
     }
@@ -142,4 +153,4 @@ def complete_json(*, model: str, system: str, user: Any, output: type[BaseModel]
     return parse_json(text, output)
 
 
-__all__ = ["DEFAULT_MODEL", "URL", "api_key", "complete_json", "headers", "parse_json", "status_message", "to_messages", "to_parts", "to_tools"]
+__all__ = ["DEFAULT_MODEL", "FREE_FALLBACKS", "URL", "api_key", "complete_json", "headers", "parse_json", "route", "status_message", "to_messages", "to_parts", "to_tools"]

@@ -21,7 +21,7 @@ demo-account:     ## create/refresh demo@finmcp.dev with 180 days of data; print
 	$(PY) scripts/demo_account.py $(ARGS)
 
 api:              ## FastAPI backend + remote MCP endpoint on :8000 (serves web/dist when built)
-	$(PY) -m uvicorn api.main:app --port 8000 --reload --reload-include .env
+	$(PY) -m uvicorn api.main:app --port 8000 --reload --reload-include .env --timeout-graceful-shutdown 2
 
 web:              ## Vite dev server on :5173 (proxies /api and /mcp to :8000)
 	cd web && npm run dev

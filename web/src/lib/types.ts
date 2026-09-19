@@ -118,6 +118,29 @@ export interface Recurring {
 
 export interface RecurringReport { count: number; monthly_total: number; monthly_expenses: number; upcoming: Recurring[]; items: Recurring[]; checked_at: string }
 
+export interface Emi {
+  id: number;
+  name: string;
+  lender: string | null;
+  amount: number;
+  start_date: string;
+  tenure_months: number;
+  principal: number | null;
+  paid_count: number;
+  left_count: number;
+  progress_pct: number;
+  paid_total: number;
+  outstanding: number;
+  total_payable: number;
+  interest: number | null;
+  next_due: string | null;
+  days_until: number | null;
+  ends_on: string;
+  closed: boolean;
+}
+
+export interface EmiReport { count: number; monthly_total: number; outstanding: number; next: Emi | null; items: Emi[] }
+
 export interface Goal {
   id: number;
   name: string;
@@ -155,6 +178,7 @@ export interface Overview {
   recurring_count: number;
   recent: Transaction[];
   goals: Goal[];
+  emi?: { count: number; monthly_total: number; outstanding: number; next: Emi | null };
   needs_review: number;
   week_end: string;
 }

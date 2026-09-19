@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { Chip, Empty, ErrorBox, Icon, PageHead, Spinner } from "../components/ui";
 import { api } from "../lib/api";
-import { dateLabel, money, num, relTime } from "../lib/format";
+import { addDays, dateLabel, money, num, relTime, todayIso } from "../lib/format";
 import { useLedger } from "../lib/ledger";
 import { useStatus } from "../lib/status";
 import type { ImportPreview, ImportRecord, ImportReport } from "../lib/types";
@@ -55,7 +56,7 @@ export default function Import() {
       form.append("kind", kind);
       const r = await api.upload<ImportReport>("/import", form);
       setReport(r); setPreview(null);
-      toast(`Imported ${r.inserted} new, skipped ${r.duplicates} duplicates.`);
+      toast(r.inserted ? `Imported ${r.inserted} new${r.duplicates ? `, skipped ${r.duplicates} duplicates` : ""}.` : `Nothing new: all ${r.duplicates} were already in your ledger.`);
       bump(); void loadRecent();
     } catch (e) { toast(e instanceof Error ? e.message : String(e), "err"); } finally { setBusy(false); }
   };
@@ -144,6 +145,7 @@ export default function Import() {
                 <Stat k="Needs review" v={num(report.needs_review)} />
                 <Stat k="Duplicates" v={num(report.duplicates)} />
               </div>
+              <ImportedNote report={report} />
               <div className="table-wrap">
                 <table className="table">
                   <thead><tr><th>Date</th><th>Merchant</th><th>Category</th><th className="num">Amount</th></tr></thead>
@@ -167,5 +169,26 @@ export default function Import() {
         </div>
       </div>
     </>
+  );
+}
+
+/** Where the imported rows are. The Transactions list opens on the last 90 days, so a receipt or statement dated earlier
+    is saved but out of view there: say so, and link to a view that shows it. */
+function ImportedNote({ report }: { report: ImportReport }) {
+  if (!report.inserted) return null;
+  const since = addDays(todayIso(), -90);
+  const old = report.transactions.filter((t) => t.date < since);
+  const merchants = [...new Set(report.transactions.map((t) => t.merchant))];
+  const q = new URLSearchParams({ period: old.length ? "all time" : "last 90 days" });
+  if (merchants.length === 1) q.set("search", merchants[0]);
+  return (
+    <div className="import-note">
+      <span>
+        {old.length
+          ? <>{old.length === report.inserted ? "It is" : `${old.length} of them are`} dated {dateLabel(old[0].date, { day: "numeric", month: "short", year: "numeric" })}, older than the last 90 days the Transactions list starts on.</>
+          : <>Saved to your ledger{report.categorized ? " and filed into categories" : ""}.</>}
+      </span>
+      <Link className="btn sm" to={`/app/transactions?${q}`}>See in Transactions<Icon name="arrowRight" /></Link>
+    </div>
   );
 }

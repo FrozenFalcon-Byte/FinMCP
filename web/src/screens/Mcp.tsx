@@ -1,6 +1,7 @@
 /* MCP, live. The app is an MCP host: every screen reads and writes the ledger through its own MCP clients, and the
    server reaches back through sampling, elicitation and roots. This screen draws that architecture, streams the
    real protocol traffic, and lets you drive every primitive by hand. */
+import { motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useToast } from "../components/Toast";
@@ -11,7 +12,7 @@ import { KIND_LABEL, useFeed, type McpOverview, type McpSchema, type TraceEntry,
 import { useApi } from "../lib/useApi";
 
 type Edge = "ui-web" | "ui-asst" | "web-srv" | "asst-srv" | "srv-db" | "ext-srv";
-interface Pulse { id: number; edge: Edge; back: boolean; kind: string }
+interface Pulse { id: number; edge: Edge; back: boolean; kind: string; delay: number }
 
 const PATHS: Record<Edge, string> = {
   "ui-web": "M150 176 C 200 176, 220 118, 268 118",
@@ -34,6 +35,7 @@ function edgesFor(e: TraceEntry): Edge[] {
 function Diagram({ pulses, overview }: { pulses: Pulse[]; overview: McpOverview | null }) {
   const web = overview?.sessions[0];
   const sampling = web?.offers.includes("sampling");
+  const hot = new Set(pulses.map((p) => p.edge));
   return (
     <svg className="arch" viewBox="0 0 880 370" role="img" aria-label="FinMCP architecture: this app hosts two MCP clients that talk to the FinMCP server, which owns the Postgres ledger; external MCP clients connect over HTTP.">
       <defs>
@@ -41,19 +43,20 @@ function Diagram({ pulses, overview }: { pulses: Pulse[]; overview: McpOverview 
       </defs>
       <rect x="236" y="40" width="226" height="286" rx="22" className="arch-host" />
       <text x="349" y="64" className="arch-cap" textAnchor="middle">MCP HOST · FastAPI</text>
-      {Object.entries(PATHS).map(([k, d]) => <path key={k} d={d} className={`arch-edge ${k === "ext-srv" ? "dashed" : ""}`} markerEnd="url(#arr)" />)}
+      {Object.entries(PATHS).map(([k, d]) => <path key={k} d={d} className={`arch-edge ${k === "ext-srv" ? "dashed" : ""} ${hot.has(k as Edge) ? "on" : ""}`} markerEnd="url(#arr)" />)}
       <g className="arch-node"><rect x="20" y="150" width="130" height="80" rx="18" /><text x="85" y="186" textAnchor="middle" className="t">You</text><text x="85" y="206" textAnchor="middle" className="s">screens · Ask</text></g>
       <g className="arch-node client"><rect x="268" y="84" width="160" height="68" rx="16" /><text x="348" y="113" textAnchor="middle" className="t">finmcp-web</text><text x="348" y="133" textAnchor="middle" className="s">elicitation · roots{sampling ? " · sampling" : ""}</text></g>
       <g className="arch-node client alt"><rect x="268" y="228" width="160" height="68" rx="16" /><text x="348" y="257" textAnchor="middle" className="t">finmcp-assistant</text><text x="348" y="277" textAnchor="middle" className="s">model tool loop</text></g>
       <g className="arch-node core"><rect x="548" y="120" width="164" height="118" rx="20" /><text x="630" y="152" textAnchor="middle" className="t">FinMCP server</text>
-        <text x="630" y="176" textAnchor="middle" className="s">24 tools · 13 resources</text><text x="630" y="194" textAnchor="middle" className="s">4 prompts · completions</text><text x="630" y="212" textAnchor="middle" className="s">subscriptions/listen</text></g>
+        <text x="630" y="176" textAnchor="middle" className="s">27 tools · 13 resources</text><text x="630" y="194" textAnchor="middle" className="s">4 prompts · completions</text><text x="630" y="212" textAnchor="middle" className="s">subscriptions/listen</text></g>
       <g className="arch-node"><rect x="770" y="158" width="96" height="64" rx="16" /><text x="818" y="186" textAnchor="middle" className="t">Postgres</text><text x="818" y="204" textAnchor="middle" className="s">row-level security</text></g>
       <g className="arch-node ghost"><rect x="552" y="330" width="156" height="34" rx="12" /><text x="630" y="352" textAnchor="middle" className="s">Claude Desktop · Cursor · CLI</text></g>
       <text x="642" y="290" className="arch-cap">/mcp · bearer token</text>
+      {/* Each message is a short streak of light that runs the length of its edge (normalised with pathLength=1). */}
       {pulses.map((p) => (
-        <circle key={p.id} r="6" className={`arch-pulse k-${p.kind}`}>
-          <animateMotion dur="0.85s" path={PATHS[p.edge]} keyPoints={p.back ? "1;0" : "0;1"} keyTimes="0;1" calcMode="linear" fill="freeze" />
-        </circle>
+        <motion.path key={p.id} d={PATHS[p.edge]} pathLength={1} className={`arch-comet k-${p.kind}`} strokeDasharray="0.16 1.4"
+          initial={{ strokeDashoffset: p.back ? -1 : 0.16, opacity: 0 }} animate={{ strokeDashoffset: p.back ? 0.16 : -1, opacity: [0, 1, 1, 0] }}
+          transition={{ duration: 0.9, delay: p.delay, ease: [0.45, 0, 0.25, 1], opacity: { duration: 0.9, delay: p.delay, times: [0, 0.12, 0.8, 1] } }} />
       ))}
     </svg>
   );
@@ -201,11 +204,15 @@ export default function Mcp() {
     const e = ev as unknown as TraceEntry;
     setStats((s) => s && { ...s, total: e.seq, by_kind: { ...s.by_kind, [e.kind]: (s.by_kind[e.kind] ?? 0) + 1 }, by_method: { ...s.by_method, [e.method]: (s.by_method[e.method] ?? 0) + 1 } });
     if (!pausedRef.current) setEntries((xs) => [e, ...xs].slice(0, 200));
-    const fresh: Pulse[] = edgesFor(e).map((edge) => ({ id: ++pid.current, edge, back: e.dir === "in", kind: e.kind }));
-    if (e.client.includes("assistant") && e.kind === "tool") fresh.push({ id: ++pid.current, edge: "ui-asst", back: false, kind: e.kind });
-    else if (e.kind === "tool" || e.kind === "resource") fresh.push({ id: ++pid.current, edge: "ui-web", back: false, kind: e.kind });
+    // One message travels hop by hop: you → client → server → database (or back the other way), each leg after the last.
+    const back = e.dir === "in";
+    const legs: { edge: Edge; back: boolean }[] = edgesFor(e).map((edge) => ({ edge, back }));
+    if (e.client.includes("assistant") && e.kind === "tool") legs.unshift({ edge: "ui-asst", back: false });
+    else if (e.kind === "tool" || e.kind === "resource") legs.unshift({ edge: "ui-web", back: false });
+    if (back) legs.reverse();
+    const fresh: Pulse[] = legs.map((l, i) => ({ id: ++pid.current, ...l, kind: e.kind, delay: i * 0.3 }));
     setPulses((ps) => [...ps, ...fresh].slice(-24));
-    window.setTimeout(() => setPulses((ps) => ps.filter((p) => !fresh.includes(p))), 900);
+    window.setTimeout(() => setPulses((ps) => ps.filter((p) => !fresh.includes(p))), 1000 + fresh.length * 300);
   });
 
   // Opened from a landing-page card (/app/mcp#sampling): bring that primitive into view and light it up once.

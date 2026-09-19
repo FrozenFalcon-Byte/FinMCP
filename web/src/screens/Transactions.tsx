@@ -1,10 +1,11 @@
+import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { Avatar, Chip, Empty, ErrorBox, Icon, PageHead, Sheet, Skeleton, Spinner } from "../components/ui";
 import { isFresh, peek, put } from "../lib/cache";
 import { api } from "../lib/api";
-import { dayLabel, money } from "../lib/format";
+import { dateLabel, dayLabel, money } from "../lib/format";
 import { useLedger } from "../lib/ledger";
 import { PERIODS } from "../lib/periods";
 import { useStatus } from "../lib/status";
@@ -29,6 +30,7 @@ export default function Transactions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [info, setInfo] = useState<Transaction | null>(null);
   const [busy, setBusy] = useState(false);
 
   const set = (k: string, v: string | null) => {
@@ -158,7 +160,7 @@ export default function Transactions() {
         <div className="day-group" key={date}>
           <div className="day-head"><span>{dayLabel(date)}</span><span className="num">{money(items.filter((t) => t.direction === "debit").reduce((s, t) => s + t.amount, 0), currency)}</span></div>
           {items.map((t) => (
-            <div className={`tx ${t.needs_review ? "review" : ""}`} key={t.id} onClick={() => setEditing(t)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") setEditing(t); }}>
+            <div className={`tx ${t.needs_review ? "review" : ""}`} key={t.id} onClick={() => setInfo(t)} role="button" tabIndex={0} aria-label={`${t.merchant}, details`} onKeyDown={(e) => { if (e.key === "Enter") setInfo(t); }}>
               <Avatar name={t.merchant} credit={t.direction === "credit"} neutral={t.direction !== "credit"} />
               <div className="grow">
                 <div className="t ellipsis">{t.merchant}</div>
@@ -170,11 +172,23 @@ export default function Transactions() {
                 </div>
               </div>
               <div className={`amt num ${t.direction === "credit" ? "in" : ""}`}>{t.direction === "credit" ? "+" : ""}{money(t.amount, currency, 2)}</div>
+              <button type="button" className="tx-edit" aria-label={`Edit ${t.merchant}`} title="Edit"
+                onClick={(e) => { e.stopPropagation(); setEditing(t); }} onKeyDown={(e) => e.stopPropagation()}><Icon name="edit" /></button>
             </div>
           ))}
         </div>
       ))}
       {rows.length < total ? <div style={{ textAlign: "center", marginTop: 12 }}><button className="btn" onClick={() => void load(rows.length)} disabled={loading}>{loading ? <Spinner /> : `Show more (${(total - rows.length).toLocaleString("en-IN")} left)`}</button></div> : null}
+
+      <Sheet open={!!info} onClose={() => setInfo(null)} title={info?.merchant ?? ""} sub={info ? `${info.category ?? "Uncategorised"} · ${dayLabel(info.date)}` : ""}
+        actions={info ? (
+          <>
+            <button className="btn" onClick={() => { set("search", info.merchant); setInfo(null); }}><Icon name="search" />All from {info.merchant.length > 18 ? "here" : info.merchant}</button>
+            <button className="btn primary" onClick={() => { setEditing(info); setInfo(null); }}><Icon name="edit" />Edit</button>
+          </>
+        ) : null}>
+        {info ? <TxInfo tx={info} rows={rows} currency={currency} /> : null}
+      </Sheet>
 
       <Sheet open={!!editing} onClose={() => setEditing(null)} title={editing?.merchant ?? ""} sub={editing ? `${dayLabel(editing.date)} · ${money(editing.amount, currency, 2)} · ${editing.direction === "credit" ? "money in" : "money out"}${editing.client ? ` · added via ${editing.client}` : ""}` : ""}
         actions={editing ? (
@@ -230,5 +244,46 @@ function EditForm({ tx, cats, busy, onSave }: { tx: Transaction; cats: Category[
       {tx.raw_text ? <div className="small muted mono" style={{ wordBreak: "break-all" }}>{tx.raw_text}</div> : null}
       <button className="btn primary" type="submit" disabled={busy}>{busy ? <Spinner /> : <><Icon name="check" />Save</>}</button>
     </form>
+  );
+}
+
+/** The read-only card a transaction opens to: the amount up top, then the facts behind it and how it was filed. */
+function TxInfo({ tx, rows, currency }: { tx: Transaction; rows: Transaction[]; currency: string }) {
+  const credit = tx.direction === "credit";
+  const when = dayLabel(tx.date);
+  const same = rows.filter((r) => r.merchant === tx.merchant && r.direction === tx.direction);
+  const sameTotal = same.reduce((s, r) => s + r.amount, 0);
+  const conf = tx.category_confidence == null ? null : Math.round(tx.category_confidence <= 1 ? tx.category_confidence * 100 : tx.category_confidence);
+  const filed = !tx.category ? "Not filed yet" : tx.category_source === "user" ? "Filed by you" : `Filed automatically${conf != null ? ` · ${conf}% sure` : ""}`;
+  const via = tx.client && !["web", "seed"].includes(tx.client) ? `via ${tx.client}` : tx.source === "manual" ? "by hand" : `from ${tx.source}`;
+  const facts: [string, string, string?][] = [
+    ["Date", dateLabel(tx.date, { weekday: "short", day: "numeric", month: "short", year: "numeric" })],
+    ["Category", tx.category ?? "Uncategorised", filed],
+    ["Type", credit ? "Money in" : "Money out", tx.category_kind ?? undefined],
+    ["Added", via, dateLabel(tx.created_at.slice(0, 10), { day: "numeric", month: "short" })],
+  ];
+  return (
+    <div className="tx-info">
+      <motion.div className="tx-info-hero" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+        <Avatar name={tx.merchant} credit={credit} neutral={!credit} lg />
+        <div>
+          <div className={`v num ${credit ? "in" : ""}`}>{credit ? "+" : "−"}{money(tx.amount, currency, 2)}</div>
+          <div className="s">{credit ? "came in" : "went out"} {["Today", "Yesterday"].includes(when) ? when.toLowerCase() : `on ${when}`}</div>
+        </div>
+      </motion.div>
+      {tx.needs_review ? <div className="tx-info-flag"><Icon name="spark" />FinMCP was not sure how to file this one. Edit it to set the category; it will remember the merchant.</div> : null}
+      <div className="tx-info-grid">
+        {facts.map(([k, v, h], i) => (
+          <motion.div key={k} className="cell" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, delay: 0.06 + i * 0.04 }}>
+            <span className="k">{k}</span><b>{v}</b>{h ? <span className="h">{h}</span> : null}
+          </motion.div>
+        ))}
+      </div>
+      {tx.description ? <div className="tx-info-note"><span className="k">Note</span>{tx.description}</div> : null}
+      {tx.raw_text && tx.raw_text.trim() !== tx.merchant ? <div className="tx-info-note"><span className="k">As it came in</span><code>{tx.raw_text}</code></div> : null}
+      {same.length > 1 ? (
+        <div className="tx-info-more"><b className="num">{same.length}</b> {credit ? "payments from" : "payments to"} {tx.merchant} in this list · <b className="num">{money(sameTotal, currency)}</b> in all</div>
+      ) : null}
+    </div>
   );
 }

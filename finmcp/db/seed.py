@@ -14,6 +14,8 @@ RECURRING: list[tuple[int, str, str, Any, str]] = [
     (1, "ACME TECHNOLOGIES PVT LTD", "NEFT/SALARY/ACME TECH/{mon}{yy}", 95000, "credit"),
     (2, "RENT - MR SHARMA", "UPI/P2A/{ref}/RENT {mon}", 25000, "debit"),
     (3, "CULT.FIT", "UPI/CULTFIT/{ref}/Membership", 1500, "debit"),
+    (4, "BAJAJ FINSERV", "NACH/BAJAJ FINANCE LTD/EMI {ref}", 3499, "debit"),
+    (7, "HDFC BANK AUTO LOAN", "ACH/HDFC BANK/LOAN EMI/{ref}", 8900, "debit"),
     (5, "ZERODHA COIN SIP", "ACH/ZERODHA BROKING/SIP", 10000, "debit"),
     (8, "AIRTEL POSTPAID", "BBPS/AIRTEL/{ref}/Mobile bill", 599, "debit"),
     (10, "ACT FIBERNET", "UPI/ACTFIBERNET/{ref}/Broadband", 999, "debit"),
@@ -136,4 +138,9 @@ def seed_demo_data(repo: Repository, *, days: int = 90, end: date | None = None,
     duplicates = len(batch) - inserted
     categorized = categorized if inserted == len(batch) else min(categorized, inserted)
     repo.audit("seed", "seed_demo_data", detail={"inserted": inserted, "duplicates": duplicates, "categorized": categorized})
+    if not repo.list_emis():  # the two loans behind the BAJAJ FINSERV and HDFC BANK AUTO LOAN payments above
+        from ..services.emis import add_months
+        repo.create_emi("iPhone 16 (no-cost EMI)", 3499, add_months(date(end.year, end.month, 4), -8).isoformat(), 24,
+                        lender="Bajaj Finserv", principal=83976)
+        repo.create_emi("Car loan", 8900, add_months(date(end.year, end.month, 7), -20).isoformat(), 60, lender="HDFC Bank", principal=460000)
     return {"inserted": inserted, "duplicates": duplicates, "categorized": categorized, "categories": len(repo.list_categories())}

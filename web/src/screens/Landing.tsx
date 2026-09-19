@@ -321,7 +321,7 @@ function Story() {
    picture on each card is what that primitive looks like on the wire, drawn in HTML (no images, no glyph icons). */
 type Tone = "blue" | "ink" | "paper" | "sun";
 const PRIMITIVES: { id: string; n?: string; h: string; method: string; p: string; tone: Tone; viz: ReactNode }[] = [
-  { id: "playground", n: "24", h: "Tools", method: "tools/call", tone: "blue", p: "Add, categorise, import, budget, plan goals and run guarded SQL. Written once, used by every client.",
+  { id: "playground", n: "27", h: "Tools", method: "tools/call", tone: "blue", p: "Add, categorise, import, budget, plan goals, track EMIs and run guarded SQL. Written once, used by every client.",
     viz: <div className="viz call"><code>add_transaction</code><span className="arg">merchant: <i>"Swiggy"</i>, amount: <i>420</i></span><span className="ok"><Icon name="check" />Food &amp; Dining</span></div> },
   { id: "playground", n: "13", h: "Resources", method: "resources/read", tone: "ink", p: "Overview, alerts, recurring bills, the review queue, and any month as a URI template.",
     viz: <div className="viz uris">{["finmcp://overview", "finmcp://alerts", "finmcp://transactions/2026-09"].map((u) => <code key={u}><span className="live-dot" />{u}</code>)}</div> },

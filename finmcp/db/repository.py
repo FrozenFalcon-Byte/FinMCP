@@ -64,6 +64,18 @@ class Goal(BaseModel):
     updated_at: str
 
 
+class Emi(BaseModel):
+    id: int
+    name: str
+    lender: str | None = None
+    amount: float
+    start_date: str
+    tenure_months: int
+    principal: float | None = None
+    created_at: str
+    updated_at: str
+
+
 # --------------------------------------------------------------------------- helpers
 
 _MERCHANT_NOISE = re.compile(
@@ -539,6 +551,47 @@ class Repository:
             self._emit("goal", "delete", goal_id)
         return n > 0
 
+    # ---------------------------------------------------------------- EMIs
+
+    def list_emis(self) -> list[Emi]:
+        rows = self._all("SELECT id, name, lender, amount, start_date, tenure_months, principal, created_at, updated_at FROM emis WHERE user_id = %s ORDER BY start_date, id", (self.user_id,))
+        return [Emi(**r) for r in rows]
+
+    def get_emi(self, emi_id: int) -> Emi | None:
+        row = self._one("SELECT id, name, lender, amount, start_date, tenure_months, principal, created_at, updated_at FROM emis WHERE user_id = %s AND id = %s", (self.user_id, emi_id))
+        return Emi(**row) if row else None
+
+    def create_emi(self, name: str, amount: float, start_date: str, tenure_months: int, *, lender: str | None = None,
+                   principal: float | None = None) -> Emi:
+        row = self._one(
+            """INSERT INTO emis (user_id, name, lender, amount, start_date, tenure_months, principal) VALUES (%s, %s, %s, %s, %s, %s, %s)
+               RETURNING id, name, lender, amount, start_date, tenure_months, principal, created_at, updated_at""",
+            (self.user_id, name.strip(), (lender or "").strip() or None, float(amount), start_date, int(tenure_months), principal),
+        )
+        assert row is not None
+        self._emit("emi", "insert", int(row["id"]))
+        return Emi(**row)
+
+    def update_emi(self, emi_id: int, **fields: Any) -> Emi:
+        bad = set(fields) - {"name", "lender", "amount", "start_date", "tenure_months", "principal"}
+        if bad:
+            raise ValueError(f"Cannot update EMI fields: {sorted(bad)}")
+        if fields:
+            sets = ", ".join(f"{k} = %s" for k in fields)
+            if self._exec(f"UPDATE emis SET {sets} WHERE user_id = %s AND id = %s", (*fields.values(), self.user_id, emi_id)) == 0:
+                raise ValueError(f"EMI {emi_id} not found")
+            self._emit("emi", "update", emi_id)
+        emi = self.get_emi(emi_id)
+        if emi is None:
+            raise ValueError(f"EMI {emi_id} not found")
+        return emi
+
+    def delete_emi(self, emi_id: int) -> bool:
+        n = self._exec("DELETE FROM emis WHERE user_id = %s AND id = %s", (self.user_id, emi_id))
+        if n:
+            self._emit("emi", "delete", emi_id)
+        return n > 0
+
     # ---------------------------------------------------------------- audit / imports / activity
 
     def audit(self, actor: str, action: str, entity: str | None = None, entity_id: int | None = None, detail: Any = None) -> None:
@@ -579,7 +632,7 @@ class Repository:
         """Delete every row this account owns (all ledger tables). Used by 'delete my data'."""
         counts: dict[str, int] = {}
         with self.db.tenant(self.user_id) as conn:
-            for table in ("audit_log", "imports", "goals", "merchant_memory", "transactions", "categories"):
+            for table in ("audit_log", "imports", "goals", "emis", "merchant_memory", "transactions", "categories"):
                 counts[table] = conn.execute(f"DELETE FROM {table} WHERE user_id = %s", (self.user_id,)).rowcount
         self._emit("ledger", "erase")
         return counts

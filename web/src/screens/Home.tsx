@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Avatar, Chip, Empty, ErrorBox, Icon, Ring, Skeleton, Sparkline, Stat } from "../components/ui";
+import { Avatar, Chip, Empty, ErrorBox, Icon, Ring, Skeleton, Sparkline, useCountUp } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { compact, dayLabel, greeting, money, monthLabel } from "../lib/format";
@@ -53,7 +53,7 @@ export default function Home() {
         <div className="between" style={{ alignItems: "flex-start" }}>
           <div>
             <div className="label">Spent this month</div>
-            <div className="big num">{o ? <Stat value={o.spent} format={(n) => money(n, currency)} /> : <Skeleton h={44} w={220} />}</div>
+            <div className="big num">{o ? <HeroAmount value={o.spent} currency={currency} /> : <Skeleton h={44} w={220} />}</div>
             <div className="pace">
               {o && pace !== null && pace !== undefined ? (
                 <Chip tone={pace <= 0 ? "good" : "warn"}><Icon name={pace <= 0 ? "arrowDown" : "arrowUp"} />{Math.abs(pace).toFixed(0)}% vs this point last month</Chip>
@@ -64,7 +64,7 @@ export default function Home() {
             {o?.insights.length ? <p className="insight">{o.insights.find((i) => i.kind === "mover")?.text ?? o.insights.find((i) => i.kind !== "pace")?.text ?? o.insights[0].text}</p> : null}
           </div>
           {sts?.per_day != null ? (
-            <Ring pct={sts.used_pct ?? 0} size={104} stroke={10}>
+            <Ring pct={sts.used_pct ?? 0} size={104} stroke={6}>
               <b className="num">{sts.used_pct != null ? `${Math.round(sts.used_pct)}%` : "—"}</b>
               <span>of budget</span>
             </Ring>
@@ -119,7 +119,7 @@ export default function Home() {
           <div className="grid three">
             {o.goals.slice(0, 3).map((g) => (
               <div className="goal-card" key={g.id}>
-                <Ring pct={g.progress_pct ?? 0} size={64} stroke={7} tone=""><b className="num" style={{ fontSize: 13 }}>{Math.round(g.progress_pct ?? 0)}%</b></Ring>
+                <Ring pct={g.progress_pct ?? 0} size={64} stroke={5} tone=""><b className="num" style={{ fontSize: 13 }}>{Math.round(g.progress_pct ?? 0)}%</b></Ring>
                 <div className="grow"><div className="strong ellipsis">{g.icon ? `${g.icon} ` : ""}{g.name}</div><div className="small muted num">{compact(g.saved, currency)} of {compact(g.target, currency)}</div></div>
               </div>
             ))}
@@ -207,4 +207,9 @@ function WhereItWent({ o, currency, onPick }: { o: Overview; currency: string; o
       </div>
     </div>
   );
+}
+
+/** The month's spend, counted up on arrival. */
+function HeroAmount({ value, currency }: { value: number; currency: string }) {
+  return <>{money(useCountUp(value, 900) ?? value, currency)}</>;
 }

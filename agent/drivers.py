@@ -30,7 +30,8 @@ class DriverFinal:
 class ModelDriver(Protocol):
     name: str
 
-    def stream(self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[dict[str, Any]]:
+    def stream(self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]],
+               answer_now: bool = False) -> AsyncIterator[dict[str, Any]]:
         """Yield {"type": "text_delta", "text": ...} events and finally {"type": "final", "final": DriverFinal}."""
         ...
 
@@ -59,7 +60,8 @@ class AnthropicDriver:
             self._client = anthropic.AsyncAnthropic(max_retries=self.max_retries, timeout=self.timeout)
         return self._client
 
-    async def stream(self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[dict[str, Any]]:
+    async def stream(self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]],
+                     answer_now: bool = False) -> AsyncIterator[dict[str, Any]]:
         import anthropic
 
         kwargs: dict[str, Any] = dict(
@@ -70,6 +72,8 @@ class AnthropicDriver:
             tools=tools,
             output_config={"effort": self.effort},
         )
+        if answer_now:
+            kwargs["tool_choice"] = {"type": "none"}
         if self.fallbacks:
             kwargs["betas"] = ["server-side-fallback-2026-07-01"]
             kwargs["fallbacks"] = "default"
@@ -192,7 +196,8 @@ class LocalDriver:
             return self.NOTICE + f"{data.get('total', 0)} matching transactions.\n\n" + _table(["date", "merchant", "amount", "category", "description"], rows, 25)
         return self.NOTICE + "```json\n" + json.dumps(data, indent=2)[:4000] + "\n```"
 
-    async def stream(self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[dict[str, Any]]:
+    async def stream(self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]],
+                     answer_now: bool = False) -> AsyncIterator[dict[str, Any]]:
         pending = _pending_tool_results(messages)
         if pending:
             # find the tool name from the previous assistant turn
@@ -225,7 +230,8 @@ class ScriptedDriver:
     calls: list[dict[str, Any]] = field(default_factory=list)
     _ids: Any = field(default_factory=lambda: itertools.count(1))
 
-    async def stream(self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[dict[str, Any]]:
+    async def stream(self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]],
+                     answer_now: bool = False) -> AsyncIterator[dict[str, Any]]:
         self.calls.append({"system": system, "messages": [dict(m) for m in messages], "tools": tools})
         if not self.turns:
             raise DriverError("scripted driver ran out of turns")
@@ -246,19 +252,23 @@ class OpenRouterDriver:
 
     name = "openrouter"
 
-    def __init__(self, model: str, *, max_tokens: int = 8000, timeout: float = 300.0):
+    def __init__(self, model: str, *, max_tokens: int = 8000, timeout: float = 120.0):
         self.model = model
         self.max_tokens = max_tokens
         self.timeout = timeout
 
-    async def stream(self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[dict[str, Any]]:
+    async def stream(self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]],
+                     answer_now: bool = False) -> AsyncIterator[dict[str, Any]]:
         import httpx
 
         from finmcp.llm import openrouter
 
-        body: dict[str, Any] = {"model": self.model, "max_tokens": self.max_tokens, "stream": True,
-                                "messages": openrouter.to_messages(system, messages)}
-        if tools:
+        msgs = openrouter.to_messages(system, messages)
+        if answer_now:
+            # Not every model honours tool_choice "none", so the final turn goes out with no tools at all.
+            msgs.append({"role": "user", "content": "Answer my question now in plain text, using only the tool results above. Do not ask for more data."})
+        body: dict[str, Any] = {**openrouter.route(self.model), "max_tokens": self.max_tokens, "stream": True, "messages": msgs}
+        if tools and not answer_now:
             body["tools"] = openrouter.to_tools(tools)
         text, calls, finish, usage, model = "", {}, None, None, None
         try:

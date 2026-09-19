@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    host: true, // reachable from a phone on the same Wi-Fi (http://<this Mac's IP>:5173)
     proxy: {
       "/api": { target: "http://127.0.0.1:8000", changeOrigin: true },
       "/mcp": { target: "http://127.0.0.1:8000", changeOrigin: true },

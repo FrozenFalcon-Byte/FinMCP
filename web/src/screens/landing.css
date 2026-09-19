@@ -277,9 +277,11 @@
   text-decoration: none; color: #fff; background: var(--navy); border: 1px solid transparent;
   transition: transform .45s cubic-bezier(.22, 1, .36, 1), box-shadow .45s, border-color .3s; will-change: transform;
 }
-.p-card:hover { transform: translateY(-10px) rotate(-.6deg); box-shadow: 0 30px 60px -24px rgba(27, 27, 60, .35); }
+.p-card:hover { transform: translateY(-8px); box-shadow: 0 30px 60px -24px rgba(27, 27, 60, .35); }
 .p-card:focus-visible { outline: 3px solid var(--b); outline-offset: 4px; }
 .p-card.blue { background: linear-gradient(160deg, #5b52ff, #4d43fe 55%, #3a31e0); border-color: transparent; }
+.landing a.p-card { color: #fff; }
+.landing a.p-card.paper, .landing a.p-card.sun { color: var(--ink); }
 .p-card.paper { background: #fff; color: var(--ink); border-color: var(--edge); box-shadow: 0 10px 30px -18px rgba(27, 27, 60, .25); }
 .p-card.sun { background: #ffd84d; color: #1b1b1b; border-color: transparent; }
 .p-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

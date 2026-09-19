@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from ..db.repository import Repository
+from .emis import emi_report
 from .periods import month_bounds
 from .recurring import list_recurring
 from .summary import _round, check_budget_alerts, get_budget_summary, get_summary
@@ -35,6 +36,7 @@ def get_overview(repo: Repository, today: date | None = None, *, currency: str =
         f_recurring = pool.submit(list_recurring, repo, today)
         f_recent = pool.submit(repo.list_transactions, limit=6)
         f_goals = pool.submit(repo.list_goals)
+        f_emis = pool.submit(emi_report, repo, today)
         f_review = pool.submit(repo.list_transactions, needs_review_only=True, limit=1)
         f_three = pool.submit(get_summary, repo, "last 3 months", "category", top=1, today=today)
         f_largest = pool.submit(repo.list_transactions, start=month_start.isoformat(), end=today.isoformat(), direction="debit",
@@ -42,6 +44,7 @@ def get_overview(repo: Repository, today: date | None = None, *, currency: str =
         this, prev, budget, alerts = f_this.result(), f_prev.result(), f_budget.result(), f_alerts.result()
         recurring, (recent, _), goals, (_, review) = f_recurring.result(), f_recent.result(), f_goals.result(), f_review.result()
         three, (largest_rows, _) = f_three.result(), f_largest.result()
+        emis = f_emis.result()
 
     spent = this["totals"]["spent"]
     prev_spent = prev["totals"]["spent"]
@@ -102,6 +105,7 @@ def get_overview(repo: Repository, today: date | None = None, *, currency: str =
         "insights": insights[:3],
         "alerts": {"count": alerts["alert_count"], "items": alerts["alerts"][:3]},
         "upcoming": recurring["upcoming"][:5],
+        "emi": {k: emis[k] for k in ("count", "monthly_total", "outstanding", "next")},
         "recurring_monthly": recurring["monthly_expenses"],
         "recurring_count": recurring["count"],
         "recent": [t.model_dump() for t in recent],

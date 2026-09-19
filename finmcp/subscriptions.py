@@ -30,6 +30,7 @@ AFFECTED: dict[str, tuple[str, ...]] = {
                     "finmcp://review-queue", "finmcp://alerts", "finmcp://status"),
     "category": ("finmcp://overview", "finmcp://activity", "finmcp://categories", "finmcp://alerts", "finmcp://status"),
     "goal": ("finmcp://overview", "finmcp://activity", "finmcp://goals", "finmcp://status"),
+    "emi": ("finmcp://overview", "finmcp://activity", "finmcp://status"),
     "import": ("finmcp://overview", "finmcp://activity", "finmcp://imports/recent"),
     "ledger": ALL_RESOURCES,
 }

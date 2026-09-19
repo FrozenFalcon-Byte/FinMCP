@@ -12,7 +12,9 @@
         "8000",
         "--reload",
         "--reload-include",
-        ".env"
+        ".env",
+        "--timeout-graceful-shutdown",
+        "2"
       ],
       "port": 8000
     },

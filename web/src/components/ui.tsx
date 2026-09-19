@@ -65,12 +65,13 @@ export function Ring({ pct, size = 84, stroke = 9, tone, children }: { pct: numb
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(100, pct));
-  const t = tone ?? (pct >= 100 ? "bad" : pct >= 80 ? "warn" : "");
+  const t = tone ?? (pct >= 100 ? "bad" : "");
   return (
     <div className={`ring ${t}`} style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle className="track" cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} />
-        <circle className="fill" cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} strokeDasharray={c} strokeDashoffset={c * (1 - clamped / 100)} />
+        <motion.circle className="fill" cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} strokeDasharray={c}
+          initial={{ strokeDashoffset: c }} animate={{ strokeDashoffset: c * (1 - clamped / 100) }} transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }} />
       </svg>
       <div className="in">{children}</div>
     </div>
@@ -98,12 +99,16 @@ export function Sparkline({ values, height = 76, color = "var(--accent)", labels
 }
 
 export function Bar({ pct, tone, thin }: { pct: number; tone?: "warn" | "bad" | ""; thin?: boolean }) {
-  const t = tone ?? (pct >= 100 ? "bad" : pct >= 80 ? "warn" : "");
+  const t = tone ?? (pct >= 100 ? "bad" : "");
   return <div className={`bar ${t} ${thin ? "thin" : ""}`}><i style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} /></div>;
 }
 
 /** Centered modal sheet. Escape and backdrop close it. */
 export function Sheet({ open, onClose, title, sub, children, actions }: { open: boolean; onClose: () => void; title: string; sub?: string; children: ReactNode; actions?: ReactNode }) {
+  // Keep the last contents on screen while the card animates away (callers usually clear them on close).
+  const last = useRef({ title, sub, children, actions });
+  if (open) last.current = { title, sub, children, actions };
+  const shown = last.current;
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -120,15 +125,32 @@ export function Sheet({ open, onClose, title, sub, children, actions }: { open: 
           <motion.div className="sheet" role="dialog" aria-modal="true" aria-label={title}
             initial={{ opacity: 0, y: 28, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}>
-            <h2>{title}</h2>
-            {sub ? <div className="sub">{sub}</div> : null}
-            {children}
-            {actions ? <div className="actions">{actions}</div> : null}
+            <button type="button" className="sheet-x" onClick={onClose} aria-label="Close"><Icon name="x" /></button>
+            <h2>{shown.title}</h2>
+            {shown.sub ? <div className="sub">{shown.sub}</div> : null}
+            {shown.children}
+            {shown.actions ? <div className="actions">{shown.actions}</div> : null}
           </motion.div>
         </motion.div>
       ) : null}
     </AnimatePresence>,
     document.body,
+  );
+}
+
+/** The big live figure at the top of a form card: it re-renders with a soft roll whenever the value changes. */
+export function FormHero({ value, sub, pct }: { value: string; sub?: ReactNode; pct?: number | null }) {
+  return (
+    <div className="form-hero">
+      <div className="v-wrap">
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span key={value} className="v num" initial={{ opacity: 0, y: 14, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            exit={{ opacity: 0, y: -14, filter: "blur(4px)" }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>{value}</motion.span>
+        </AnimatePresence>
+      </div>
+      {sub ? <div className="s">{sub}</div> : null}
+      {pct != null ? <div className="form-hero-bar"><motion.i initial={false} animate={{ width: `${Math.min(100, Math.max(0, pct))}%` }} transition={{ type: "spring", stiffness: 300, damping: 30 }} /></div> : null}
+    </div>
   );
 }
 

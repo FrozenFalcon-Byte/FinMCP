@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ToolTrace } from "../components/ToolTrace";
-import { useToast } from "../components/Toast";
+import { useIsland, useToast } from "../components/Toast";
 import { Icon, PageHead } from "../components/ui";
 import { api, streamChat } from "../lib/api";
 import { Markdown } from "../lib/markdown";
@@ -22,6 +22,7 @@ const nid = () => `m${++seq}`;
 export default function Chat() {
   const { health } = useStatus();
   const toast = useToast();
+  const island = useIsland();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -58,11 +59,21 @@ export default function Chat() {
     setMessages((ms) => [...ms, { id: nid(), role: "user", text: msg, trace: [] }, { id: nid(), role: "assistant", text: "", trace: [], pending: true }]);
     const controller = new AbortController();
     abortRef.current = controller;
+    const started = Date.now();
+    island.activity({ label: "Thinking", href: "/app/ask" });
+    let writing = false;
     const onEvent = (ev: ChatEvent) => {
       switch (ev.type) {
         case "conversation": setConversationId(ev.conversation_id); break;
-        case "text_delta": patchLast((m) => ({ ...m, text: m.text + ev.text })); break;
-        case "tool_call": patchLast((m) => ({ ...m, trace: [...m.trace, { id: ev.id, name: ev.name, input: ev.input } as ToolTraceItem] })); break;
+        case "text_delta":
+          if (!writing) { writing = true; island.activity({ label: "Writing", href: "/app/ask" }); }
+          patchLast((m) => ({ ...m, text: m.text + ev.text }));
+          break;
+        case "tool_call":
+          writing = false;
+          island.activity({ label: ev.name.replace(/_/g, " "), href: "/app/ask" });
+          patchLast((m) => ({ ...m, trace: [...m.trace, { id: ev.id, name: ev.name, input: ev.input } as ToolTraceItem] }));
+          break;
         case "tool_result": patchLast((m) => ({ ...m, trace: m.trace.map((t) => (t.id === ev.id ? { ...t, ok: ev.ok, preview: ev.preview, elapsed_ms: ev.elapsed_ms, data: ev.data } : t)) })); break;
         case "error": patchLast((m) => ({ ...m, error: ev.message })); break;
         case "done": patchLast((m) => ({ ...m, pending: false, usage: ev.usage, text: m.text || ev.text })); break;
@@ -79,10 +90,11 @@ export default function Chat() {
       }
     } finally {
       patchLast((m) => ({ ...m, pending: false }));
+      island.activity(null, controller.signal.aborted ? undefined : `Answered · ${Math.round((Date.now() - started) / 1000)}s`);
       setBusy(false);
       abortRef.current = null;
     }
-  }, [busy, conversationId, patchLast, toast]);
+  }, [busy, conversationId, patchLast, toast, island]);
 
   const stop = () => abortRef.current?.abort();
   const reset = async () => {
@@ -131,7 +143,7 @@ export default function Chat() {
                 </div>
               ) : null}
               <div className="card">
-                <div className="card-head"><h2>Try asking</h2><span className="meta">{health?.driver === "anthropic" ? "answered by Claude with FinMCP tools" : "offline engine: one tool call per question"}</span></div>
+                <div className="card-head"><h2>Try asking</h2><span className="meta">{health?.driver === "anthropic" ? "answered by Claude with FinMCP tools" : health?.driver === "openrouter" ? `answered by ${(health.model ?? "the model").split("/").pop()} with FinMCP tools` : "offline engine: one tool call per question"}</span></div>
                 <div className="suggest">{SUGGESTIONS.map((s) => <button key={s} onClick={() => void send(s)}>{s}</button>)}</div>
                 {prompts.length ? (
                   <>
@@ -160,7 +172,7 @@ export default function Chat() {
         </div>
         <div className="composer">
           <div className="box">
-            <textarea id="chat-input" className="textarea" rows={2} placeholder="Ask about spending, budgets, or a merchant… (Enter to send, Shift+Enter for a new line)" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKey} disabled={busy} />
+            <textarea id="chat-input" className="textarea" rows={2} placeholder="Ask about spending, budgets, or a merchant…" title="Enter to send, Shift+Enter for a new line" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKey} disabled={busy} />
             {busy ? <button className="btn" onClick={stop}><Icon name="x" />Stop</button> : <button className="btn primary" onClick={() => void send(input)} disabled={!input.trim()}><Icon name="send" />Send</button>}
           </div>
         </div>

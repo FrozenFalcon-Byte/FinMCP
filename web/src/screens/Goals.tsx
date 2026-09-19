@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useToast } from "../components/Toast";
-import { Empty, ErrorBox, Icon, PageHead, Ring, Sheet, Skeleton, Spinner } from "../components/ui";
+import { Empty, ErrorBox, FormHero, Icon, PageHead, Ring, Sheet, Skeleton, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { compact, dateLabel, money } from "../lib/format";
 import { useLedger } from "../lib/ledger";
@@ -40,7 +40,7 @@ export default function Goals() {
         {goals.map((x) => (
           <section className="card" key={x.id}>
             <div className="goal-card">
-              <Ring pct={x.progress_pct ?? 0} size={92} stroke={10}><b className="num">{Math.round(x.progress_pct ?? 0)}%</b><span>saved</span></Ring>
+              <Ring pct={x.progress_pct ?? 0} size={92} stroke={6}><b className="num">{Math.round(x.progress_pct ?? 0)}%</b><span>saved</span></Ring>
               <div className="grow">
                 <div className="between"><h2 className="ellipsis">{x.icon ? `${x.icon} ` : ""}{x.name}</h2><button className="btn ghost icon sm" aria-label="Edit" onClick={() => setOpen(x)}><Icon name="edit" /></button></div>
                 <div className="num" style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>{money(x.saved, currency)} <span className="muted" style={{ fontSize: 14, fontWeight: 600 }}>of {compact(x.target, currency)}</span></div>
@@ -75,8 +75,14 @@ function GoalForm({ goal, busy, currency, onSave, onDelete }: { goal: Goal | nul
   const [saved, setSaved] = useState(goal ? String(goal.saved) : "0");
   const [due, setDue] = useState(goal?.due ?? "");
   const [icon, setIcon] = useState(goal?.icon ?? "🎯");
+  const t = Number(target) || 0;
+  const sv = Number(saved) || 0;
+  const months = due ? Math.max(1, Math.round((new Date(due).getTime() - Date.now()) / (30.44 * 86400000))) : null;
+  const need = months && t > sv ? (t - sv) / months : null;
   return (
     <form className="stack" style={{ gap: 14 }} onSubmit={(e) => { e.preventDefault(); void onSave({ name: name.trim(), target: Number(target), saved: Number(saved) || 0, due: due || undefined, icon }); }}>
+      <FormHero value={`${icon} ${money(sv, currency)}`} pct={t ? (sv / t) * 100 : 0}
+        sub={t ? <>{Math.round((sv / t) * 100)}% of {money(t, currency)}{need ? <> · <b>{money(need, currency)} a month</b> to make it by {dateLabel(due)}</> : sv >= t ? " · reached" : null}</> : "Set a target to see progress"} />
       <div className="chips">{ICONS.map((i) => <button type="button" key={i} className={`chip btn-chip ${icon === i ? "on" : ""}`} onClick={() => setIcon(i)} style={{ fontSize: 16 }}>{i}</button>)}</div>
       <div className="form-grid">
         <div className="field full"><label>Name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Emergency fund" required maxLength={80} autoFocus /></div>

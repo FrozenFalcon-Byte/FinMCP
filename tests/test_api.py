@@ -179,3 +179,16 @@ def test_mcp_inspector_and_elicitation_round_trip(client):
     assert client.get("/api/mcp/read", params={"uri": "finmcp://status"}).json()["text"]
     assert "get_summary" in client.post("/api/mcp/prompt", json={"name": "monthly_spending_review", "arguments": {"month": "2026-08"}}).json()["text"]
     assert client.get("/api/mcp/complete", params={"ref": "prompt", "name": "monthly_spending_review", "argument": "month", "value": "2026"}).json()["values"]
+
+
+def test_emis_crud_and_schedule(client):
+    made = client.post("/api/emis", json={"name": "Laptop", "amount": 5000, "start_date": "2026-01-10", "tenure_months": 12,
+                                          "lender": "Bajaj Finserv", "principal": 55000}).json()["emi"]
+    assert made["paid_count"] >= 1 and made["left_count"] == 12 - made["paid_count"] and made["interest"] == 5000
+    assert made["outstanding"] == made["left_count"] * 5000 and made["ends_on"] == "2026-12-10"
+    report = client.get("/api/emis").json()
+    assert any(i["id"] == made["id"] for i in report["items"]) and report["monthly_total"] >= 5000
+    edited = client.put(f"/api/emis/{made['id']}", json={"name": "Laptop", "amount": 4000, "start_date": "2026-01-10", "tenure_months": 12}).json()["emi"]
+    assert edited["amount"] == 4000 and edited["principal"] is None
+    assert client.get("/api/overview").json()["emi"]["monthly_total"] >= 4000
+    assert client.delete(f"/api/emis/{made['id']}").json()["deleted"]

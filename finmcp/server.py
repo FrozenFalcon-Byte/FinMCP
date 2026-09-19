@@ -44,6 +44,7 @@ from .ingestion.importer import Importer
 from .llm.prompts import schema_doc
 from .llm.provider import SAMPLING_SYSTEM, LLMProvider, RuleBasedProvider, SampledProvider, get_provider, parse_sampled, sampling_prompt
 from .services.categorize import NEEDS_REVIEW_BELOW, Categorizer
+from .services.emis import emi_report, emi_status
 from .services.overview import get_overview
 from .services.periods import resolve_period
 from .services.recurring import list_recurring
@@ -787,6 +788,50 @@ def create_server(settings: Settings | None = None, *, db: Database | None = Non
             raise ValueError(f"Goal {goal_id} not found")
         st.repo.audit("mcp:delete_goal", "delete", "goal", goal_id)
         return {"deleted": True, "goal_id": goal_id}
+
+    # ------------------------------------------------------------------ tools: EMIs
+
+    @server.tool(annotations=READ)
+    @_tool_errors
+    def list_emis(ctx: Context) -> dict[str, Any]:
+        """Loans repaid in monthly instalments (EMIs): instalments paid and left, amount still owed, next due date, end date,
+        and the total monthly EMI outgo."""
+        return emi_report(tenant(ctx).repo)
+
+    @server.tool(annotations=WRITE)
+    @_tool_errors
+    def upsert_emi(
+        ctx: Context,
+        name: Annotated[str, Field(min_length=1, max_length=80, description="What the loan is for, e.g. 'iPhone 16' or 'Car loan'")],
+        amount: Annotated[float, Field(gt=0, description="Monthly instalment")],
+        start_date: Annotated[str, Field(description="Date of the first instalment, ISO date")],
+        tenure_months: Annotated[int, Field(ge=1, le=480, description="Number of monthly instalments")],
+        lender: Annotated[str | None, Field(max_length=80, description="Bank or lender, e.g. 'Bajaj Finserv'")] = None,
+        principal: Annotated[float | None, Field(gt=0, description="Amount borrowed, to show the interest paid")] = None,
+        emi_id: Annotated[int | None, Field(description="Existing EMI to update; omit to create")] = None,
+    ) -> dict[str, Any]:
+        """Add an EMI (a loan repaid in monthly instalments), or update one by emi_id."""
+        st = tenant(ctx)
+        start = _parse_iso(start_date, "start_date")
+        if emi_id is None:
+            emi = st.repo.create_emi(name, amount, start, tenure_months, lender=lender, principal=principal)
+            st.repo.audit("mcp:upsert_emi", "insert", "emi", emi.id, {"name": name, "amount": amount, "tenure_months": tenure_months})
+        else:
+            fields: dict[str, Any] = {"name": name.strip(), "amount": float(amount), "start_date": start, "tenure_months": int(tenure_months),
+                                      "lender": (lender or "").strip() or None, "principal": principal}
+            emi = st.repo.update_emi(emi_id, **fields)
+            st.repo.audit("mcp:upsert_emi", "update", "emi", emi.id, fields)
+        return {"emi": emi_status(emi, _date.today())}
+
+    @server.tool(annotations=DESTRUCTIVE)
+    @_tool_errors
+    def delete_emi(ctx: Context, emi_id: int) -> dict[str, Any]:
+        """Delete an EMI (the payments already in the ledger stay)."""
+        st = tenant(ctx)
+        if not st.repo.delete_emi(emi_id):
+            raise ValueError(f"EMI {emi_id} not found")
+        st.repo.audit("mcp:delete_emi", "delete", "emi", emi_id)
+        return {"deleted": True, "emi_id": emi_id}
 
     # ------------------------------------------------------------------ tools: activity
 
