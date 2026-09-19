@@ -9,18 +9,19 @@ build/
 
 # Env / secrets
 .env
+data/.jwt-secret
 
-# Data
-data/*.db
-data/*.db-journal
+# Data (embedded PostgreSQL, uploads, old SQLite ledgers)
+data/pgbin/
+data/pgdata/
 data/uploads/
+data/users/
+data/*.db
+data/*.db-*
 
 # Node
 web/node_modules/
 web/dist/
-
-# Progress dashboard artefacts
-progress/junit.xml
 
 # OS
 .DS_Store

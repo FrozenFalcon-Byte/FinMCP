@@ -2,21 +2,48 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "progress",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8765", "-d", "progress"],
-      "port": 8765
-    },
-    {
       "name": "api",
       "runtimeExecutable": ".venv/bin/python",
-      "runtimeArgs": ["-m", "uvicorn", "api.main:app", "--port", "8000", "--reload"],
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "api.main:app",
+        "--port",
+        "8000",
+        "--reload"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "api-local",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "SUPABASE_URL=",
+        "SUPABASE_ANON_KEY=",
+        "SUPABASE_DB_URL=",
+        "SUPABASE_JWT_SECRET=",
+        "SUPABASE_SERVICE_ROLE_KEY=",
+        ".venv/bin/python",
+        "-m",
+        "uvicorn",
+        "api.main:app",
+        "--port",
+        "8000"
+      ],
       "port": 8000
     },
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "web", "run", "dev", "--", "--port", "5173"],
+      "runtimeArgs": [
+        "--prefix",
+        "web",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5173"
+      ],
       "port": 5173
     }
   ]

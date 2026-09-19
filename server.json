@@ -1,0 +1,27 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.json",
+  "name": "io.github.ajinkya/finmcp",
+  "description": "Personal finance ledger as an MCP server: transactions, categories, budgets, text-to-SQL, statement/receipt/SMS import.",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registry_name": "pypi",
+      "name": "finmcp",
+      "version": "0.1.0",
+      "runtime_hint": "python",
+      "package_arguments": [
+        { "type": "positional", "value": "-m" },
+        { "type": "positional", "value": "finmcp" },
+        { "type": "named", "name": "--seed-if-empty", "description": "Load demo data when the ledger is empty", "is_required": false }
+      ],
+      "environment_variables": [
+        { "name": "FINMCP_DB", "description": "SQLite path (default data/finmcp.db)", "is_required": false },
+        { "name": "ANTHROPIC_API_KEY", "description": "Enables LLM categorization, text-to-SQL and vision OCR", "is_required": false, "is_secret": true },
+        { "name": "FINMCP_LLM", "description": "auto | anthropic | rules", "is_required": false }
+      ]
+    }
+  ],
+  "remotes": [
+    { "transport_type": "streamable-http", "url": "http://127.0.0.1:8080/mcp" }
+  ]
+}
