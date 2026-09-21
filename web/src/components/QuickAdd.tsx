@@ -1,7 +1,11 @@
-/* Adding to the ledger. The bar in the top bar (or the N key) opens a card: type a line the way you would say it,
-   and the pieces it understood (amount, merchant, date, category) settle in underneath as you write. */
+/* Adding to the ledger. One card, opened from anywhere: type a line the way you would say it, and the pieces it
+   understood (amount, merchant, date, category) settle in underneath as you write. One box covers both directions
+   — a leading "+" is money in — so there is nothing to choose before you start typing.
+
+   The dialog lives once, in `AddProvider`; `useAdd()` and `<AddButton/>` open it, so the same action can sit in the
+   top bar, on a page header and under your thumb without any of them owning it. */
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
@@ -15,11 +19,46 @@ import { Icon, Spinner } from "./ui";
 const SPRING = { type: "spring", stiffness: 460, damping: 32, mass: 0.7 } as const;
 const POP = { initial: { opacity: 0, y: 8, scale: 0.92 }, animate: { opacity: 1, y: 0, scale: 1 }, exit: { opacity: 0, scale: 0.92 }, transition: SPRING };
 
-export function QuickAdd() {
+const AddContext = createContext<() => void>(() => {});
+/** Opens the new-entry card. Any screen can call it; the card itself is mounted once by `AddProvider`. */
+export const useAdd = () => useContext(AddContext);
+
+export function AddProvider({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const add = useCallback(() => setOpen(true), []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+      if (!typing && (e.key === "n" || e.key === "N") && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); setOpen(true); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  return (
+    <AddContext.Provider value={add}>
+      {children}
+      <QuickAdd open={open} onClose={() => setOpen(false)} />
+    </AddContext.Provider>
+  );
+}
+
+/** The one add button, wherever it is needed. */
+export function AddButton({ className = "btn sm primary", label = "Add" }: { className?: string; label?: string }) {
+  const add = useAdd();
+  return (
+    <motion.button type="button" className={className} onClick={add} whileTap={{ scale: 0.96 }} transition={SPRING} aria-label="Add an entry" title="Add an entry (N)">
+      <Icon name="plus" /><span className="lbl">{label}</span>
+    </motion.button>
+  );
+}
+
+function QuickAdd({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { currency } = useStatus();
   const { bump, version } = useLedger();
   const toast = useToast();
-  const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [cats, setCats] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -31,21 +70,20 @@ export function QuickAdd() {
   }, [version]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const el = document.activeElement as HTMLElement | null;
-      const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
-      if (!typing && !open && (e.key === "n" || e.key === "N") && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); setOpen(true); }
-      if (open && e.key === "Escape") setOpen(false);
-    };
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, onClose]);
 
   useEffect(() => {
     if (!open) return;
     setDone(false);
+    setText("");
     document.body.style.overflow = "hidden";
-    const t = window.setTimeout(() => inputRef.current?.focus(), 60);
+    const t = window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 60);
     return () => { window.clearTimeout(t); document.body.style.overflow = ""; };
   }, [open]);
 
@@ -63,7 +101,7 @@ export function QuickAdd() {
       const tx = r.transaction;
       bump();
       setDone(true);
-      window.setTimeout(() => { setOpen(false); setText(""); }, 650);
+      window.setTimeout(() => { onClose(); setText(""); }, 650);
       toast(
         `${tx.direction === "credit" ? "Received" : "Spent"} ${money(tx.amount, currency, 2)} · ${tx.merchant} → ${tx.category ?? "uncategorized"}`,
         "ok",
@@ -84,22 +122,17 @@ export function QuickAdd() {
 
   return (
     <>
-      <button type="button" className="qa-trigger" onClick={() => setOpen(true)} aria-label="Add a transaction">
-        <Icon name="plus" className="lead" />
-        <span className="ph">Add anything: 450 swiggy · coffee 120 yesterday · +50000 salary</span>
-        <span className="kbd">N</span>
-      </button>
       {createPortal(
         <AnimatePresence>
           {open ? (
             <motion.div key="qa" className="qa-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
-              onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+              onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
               <motion.form className={`qa-card ${credit ? "in" : ""}`} role="dialog" aria-modal="true" aria-label="New entry"
                 initial={{ opacity: 0, y: 40, scale: 0.94 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 24, scale: 0.97 }} transition={SPRING}
                 onSubmit={(e) => { e.preventDefault(); void submit(); }}>
                 <div className="qa-head">
                   <span className="qa-title">New entry</span>
-                  <button type="button" className="qa-x" onClick={() => setOpen(false)} aria-label="Close"><Icon name="x" /></button>
+                  <button type="button" className="qa-x" onClick={onClose} aria-label="Close"><Icon name="x" /></button>
                 </div>
 
                 <div className="qa-amount">
@@ -142,7 +175,7 @@ export function QuickAdd() {
                 </motion.div>
 
                 <div className="qa-foot">
-                  <span className="qa-hint">{text && !draft.valid ? "Needs an amount and a merchant" : "#category · (note) · yesterday · 12 sep · + for money in"}</span>
+                  <span className="qa-hint">{text.trim() && !draft.valid ? "Needs an amount and a merchant" : "#category · (note) · yesterday · 12 sep · + for money in"}</span>
                   <motion.button type="submit" className={`qa-go ${done ? "done" : ""}`} disabled={!draft.valid || busy || done}
                     whileHover={draft.valid ? { scale: 1.04 } : undefined} whileTap={draft.valid ? { scale: 0.95 } : undefined} transition={SPRING}>
                     <AnimatePresence mode="wait" initial={false}>

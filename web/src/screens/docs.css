@@ -138,3 +138,10 @@
   .d-cta { padding: 28px 22px; margin-bottom: 64px; }
   .d-q > p span { padding-right: 22px; }
 }
+
+/* Annotation badge on a tool name: what the server tells a host before it calls. */
+.d-group dt { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.d-group dt .tag { font: 700 10px/1 "Figtree", sans-serif; letter-spacing: .06em; text-transform: uppercase; padding: 4px 7px; border-radius: 999px; }
+.d-group dt .tag.read { background: #e8f6ef; color: #0e7a55; }
+.d-group dt .tag.write { background: var(--tint); color: var(--b); }
+.d-group dt .tag.bad { background: #ffeae4; color: #c2410c; }

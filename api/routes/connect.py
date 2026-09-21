@@ -1,17 +1,47 @@
 """Connect: personal MCP tokens, the tool catalogue and which clients have been using the ledger."""
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import anyio
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from finmcp import __version__
 from finmcp.db.accounts import Principal
+from finmcp.server import create_server
 
 from ..deps import AppContext, Registry, call_tool, get_ctx, get_registry, require_principal
 
 router = APIRouter(tags=["connect"])
+
+_public_catalog: dict[str, Any] | None = None
+
+
+def _tool_row(t: Any) -> dict[str, Any]:
+    ann = getattr(t, "annotations", None)
+    return {"name": t.name, "title": getattr(t, "title", None), "description": t.description,
+            "read_only": bool(getattr(ann, "read_only_hint", False)), "destructive": bool(getattr(ann, "destructive_hint", False))}
+
+
+@router.get("/mcp/public-catalog")
+async def public_catalog(reg: Registry = Depends(get_registry)) -> dict[str, Any]:
+    """The protocol surface with no account attached: what any client sees the moment it connects. Metadata only —
+    building the server does not touch the ledger — so the public docs page can render the real thing."""
+    global _public_catalog
+    if _public_catalog is None:
+        server = create_server(reg.settings)
+        tools, resources, templates, prompts = await asyncio.gather(
+            server.list_tools(), server.list_resources(), server.list_resource_templates(), server.list_prompts())
+        _public_catalog = {
+            "server": {"name": "finmcp", "version": __version__},
+            "tools": [_tool_row(t) for t in tools],
+            "resources": [{"uri": str(r.uri), "name": r.name, "description": r.description} for r in resources],
+            "templates": [{"uri_template": t.uri_template, "name": t.name, "description": t.description} for t in templates],
+            "prompts": [{"name": p.name, "title": getattr(p, "title", None) or p.name, "description": p.description} for p in prompts],
+        }
+    return {**_public_catalog, "endpoint": f"{reg.settings.public_url}/mcp"}
 
 
 class TokenBody(BaseModel):

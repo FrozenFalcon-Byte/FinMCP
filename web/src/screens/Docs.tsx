@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring } from 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Icon, type IconName } from "../components/ui";
-import { mcpEndpoint } from "../lib/api";
+import { api, mcpEndpoint } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { NOTES, snippet } from "./Connect";
 import { Footer, Nav } from "./Landing";
@@ -34,6 +34,8 @@ const CLIENTS: { id: ClientId; label: string; sub: string }[] = [
   { id: "stdio", label: "Local process", sub: "stdio, no API needed" },
 ];
 
+/* Curated copy. Which tools actually exist comes from the server (`/api/mcp/public-catalog`); anything the
+   server lists that is not named here still shows, under "Also available", with the server's own description. */
 const GROUPS: { h: string; i: IconName; tools: [string, string][] }[] = [
   { h: "Ledger", i: "list", tools: [
     ["add_transaction", "Add one transaction. Categorised on the way in."],
@@ -117,6 +119,32 @@ const PROTOCOL: { h: string; dir: string; p: string }[] = [
   { h: "Progress & logging", dir: "server → client", p: "Long imports and batch categorisation report as they go instead of going quiet." },
 ];
 
+
+interface CatalogTool { name: string; description: string | null; read_only: boolean; destructive: boolean }
+interface Catalog {
+  endpoint: string;
+  tools: CatalogTool[];
+  resources: { uri: string; name: string; description: string | null }[];
+  templates: { uri_template: string; name: string; description: string | null }[];
+  prompts: { name: string; title: string | null; description: string | null }[];
+}
+
+/** The live protocol surface. Public — no account needed — so the page shows what the server really exposes
+    rather than a list that can drift. Null while it loads or if the backend is asleep; the page falls back to
+    the bundled reference so it is never empty. */
+function useCatalog(): Catalog | null {
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.get<Catalog>("/mcp/public-catalog").then((c) => { if (live) setCatalog(c); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  return catalog;
+}
+
+/** Tool descriptions are written for a model, so they open with the sentence a reader wants and go on. */
+const firstSentence = (text: string | null): string => (text ?? "").split(/(?<=\.)\s/)[0];
+
 /* ------------------------------------------------------------------ pieces */
 
 function Section({ id, kicker, title, children }: { id: string; kicker: string; title: string; children: ReactNode }) {
@@ -195,7 +223,23 @@ export default function Docs() {
   const { user, ready } = useAuth();
   const signedIn = ready && Boolean(user);
   const reduced = useReducedMotion();
-  const endpoint = mcpEndpoint();
+  const catalog = useCatalog();
+  const endpoint = catalog?.endpoint ?? mcpEndpoint();
+  const known = new Set(GROUPS.flatMap((g) => g.tools.map(([n]) => n)));
+  const extras = (catalog?.tools ?? []).filter((t) => !known.has(t.name));
+  const live = catalog ? new Map(catalog.tools.map((t) => [t.name, t])) : null;
+  const counts = {
+    tools: catalog?.tools.length ?? GROUPS.reduce((n, g) => n + g.tools.length, 0),
+    resources: catalog ? catalog.resources.length + catalog.templates.length : RESOURCES.length,
+    prompts: catalog?.prompts.length ?? PROMPTS.length,
+  };
+  const resourceRows: [string, string][] = catalog
+    ? [...catalog.resources.map((r) => [r.uri, firstSentence(r.description) || r.name] as [string, string]),
+       ...catalog.templates.map((t) => [t.uri_template, firstSentence(t.description) || t.name] as [string, string])]
+    : RESOURCES;
+  const promptRows: [string, string][] = catalog
+    ? catalog.prompts.map((p) => [p.name, firstSentence(p.description) || p.title || p.name] as [string, string])
+    : PROMPTS;
   const [pick, setPick] = useState<ClientId>("claude-code");
   const code = snippet(pick, endpoint, "");
   const top = useRef<HTMLDivElement>(null);
@@ -219,7 +263,8 @@ export default function Docs() {
           <span className="kicker">Documentation</span>
           <h1>Point your assistant<br />at your own ledger.</h1>
           <p>FinMCP is an MCP server first and an app second. Give any host a personal token and it gets the same
-            27 tools, 13 resources and 4 prompts these screens run on — with the same rules and the same audit trail.</p>
+            {" "}{counts.tools} tools, {counts.resources} resources and {counts.prompts} prompts these screens run on — with the same
+            rules and the same audit trail.</p>
           <div className="d-endpoint">
             <span className="lbl">Endpoint</span>
             <Copyable text={endpoint} />
@@ -285,14 +330,25 @@ export default function Docs() {
             </AnimatePresence>
           </Section>
 
-          <Section id="tools" kicker="Reference" title="27 tools, by what they touch.">
+          <Section id="tools" kicker="Reference" title={`${counts.tools} tools, by what they touch.`}>
             <div className="d-groups">
-              {GROUPS.map((g, k) => (
-                <motion.div className="d-group" key={g.h} initial={{ opacity: 0, y: 26 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.55, delay: (k % 3) * 0.07, ease: EASE }}>
-                  <div className="h"><span className="ic"><Icon name={g.i} /></span><b>{g.h}</b><span className="n">{g.tools.length}</span></div>
-                  <dl>{g.tools.map(([n, d]) => <div key={n}><dt>{n}</dt><dd>{d}</dd></div>)}</dl>
+              {GROUPS.map((g, k) => {
+                // Only claim what the server actually serves; before it answers, show the bundled reference.
+                const rows = g.tools.filter(([n]) => !live || live.has(n));
+                if (!rows.length) return null;
+                return (
+                  <motion.div className="d-group" key={g.h} initial={{ opacity: 0, y: 26 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.55, delay: (k % 3) * 0.07, ease: EASE }}>
+                    <div className="h"><span className="ic"><Icon name={g.i} /></span><b>{g.h}</b><span className="n">{rows.length}</span></div>
+                    <dl>{rows.map(([n, d]) => <ToolRow key={n} name={n} copy={d} meta={live?.get(n)} />)}</dl>
+                  </motion.div>
+                );
+              })}
+              {extras.length ? (
+                <motion.div className="d-group" initial={{ opacity: 0, y: 26 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.55, ease: EASE }}>
+                  <div className="h"><span className="ic"><Icon name="bolt" /></span><b>Also available</b><span className="n">{extras.length}</span></div>
+                  <dl>{extras.map((t) => <ToolRow key={t.name} name={t.name} copy={firstSentence(t.description)} meta={t} />)}</dl>
                 </motion.div>
-              ))}
+              ) : null}
             </div>
             <motion.p className="d-note" {...rise}>
               Each tool carries annotations, so a host knows before it calls whether something only reads or can
@@ -303,12 +359,12 @@ export default function Docs() {
           <Section id="resources" kicker="Reference" title="Resources & prompts.">
             <div className="d-two">
               <motion.div className="d-list" {...rise}>
-                <h3>Resources <span className="n">13</span></h3>
-                {RESOURCES.map(([uri, d]) => <div key={uri}><code>{uri}</code><span>{d}</span></div>)}
+                <h3>Resources <span className="n">{counts.resources}</span></h3>
+                {resourceRows.map(([uri, d]) => <div key={uri}><code>{uri}</code><span>{d}</span></div>)}
               </motion.div>
               <motion.div className="d-list" {...rise}>
-                <h3>Prompts <span className="n">4</span></h3>
-                {PROMPTS.map(([n, d]) => <div key={n}><code>{n}</code><span>{d}</span></div>)}
+                <h3>Prompts <span className="n">{counts.prompts}</span></h3>
+                {promptRows.map(([n, d]) => <div key={n}><code>{n}</code><span>{d}</span></div>)}
               </motion.div>
             </div>
           </Section>
@@ -345,6 +401,17 @@ export default function Docs() {
         </main>
       </div>
       <Footer />
+    </div>
+  );
+}
+
+/** One tool. The badge comes from the server's own annotations, so a host knows before it calls. */
+function ToolRow({ name, copy, meta }: { name: string; copy: string; meta?: CatalogTool }) {
+  const tone = meta ? (meta.destructive ? "bad" : meta.read_only ? "read" : "write") : null;
+  return (
+    <div>
+      <dt>{name}{tone ? <span className={`tag ${tone}`}>{tone === "bad" ? "destructive" : tone}</span> : null}</dt>
+      <dd>{copy}</dd>
     </div>
   );
 }

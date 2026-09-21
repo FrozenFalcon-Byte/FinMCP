@@ -124,6 +124,12 @@ def match_keywords(text: str) -> tuple[str, str] | None:
     return None
 
 
+# A model is handed the categories as a list of "- Name [kind] — description" lines, and a smaller one will
+# sometimes answer with the whole line instead of the name: "Other (expense)", "Transport — getting around".
+# No canonical name contains a bracket, colon, pipe or spaced dash, so cutting at the first one is safe.
+_DECORATION = re.compile(r"\s*(?:[([{]|[:|]|\s[—–-]\s).*$")
+
+
 def resolve_category_name(text: str) -> str | None:
     """Map free text ('food', 'Groceries', 'eating out') to a canonical category name."""
     t = text.strip().lower()
@@ -137,7 +143,8 @@ def resolve_category_name(text: str) -> str | None:
     for name in CATEGORY_NAMES:
         if t.replace("and", "&") == name.lower() or t == name.lower().replace(" & ", " and "):
             return name
-    return None
+    bare = _DECORATION.sub("", t).strip()
+    return resolve_category_name(bare) if bare and bare != t else None
 
 
 def seed_categories(repo: Repository) -> int:

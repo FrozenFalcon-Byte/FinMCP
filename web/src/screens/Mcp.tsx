@@ -230,23 +230,30 @@ export default function Mcp() {
   const web = overview.data?.sessions[0];
   const offered = (k: string) => (k === "elicitation" || k === "sampling" || k === "roots" ? web?.offers.includes(k) : true);
 
+  /* The demos run a real tool call, so what comes back is what a connected client would see. A failed call carries
+     the server's own message: hiding it behind "the call failed" is how a working boundary reads as a broken app. */
   const tryIt = async (kind: string) => {
     setBusy(kind);
     try {
       if (kind === "elicitation") {
         const merchant = MYSTERY[Math.floor(Math.random() * MYSTERY.length)];
-        const r = await api.post<{ ok: boolean; data: { transaction: { category: string | null }; asked: string | null } }>("/mcp/call", {
+        const r = await api.post<{ ok: boolean; text: string | null; data: { transaction: { category: string | null }; asked: string | null } }>("/mcp/call", {
           name: "add_transaction", arguments: { date: todayIso(), amount: 349, merchant, description: "demo purchase from the MCP screen" } });
-        toast(r.ok ? `${merchant}: ${r.data.transaction.category ?? "left uncategorised"} (${r.data.asked ?? "not asked"})` : "The call failed.");
+        toast(r.ok ? `${merchant}: ${r.data.transaction.category ?? "left uncategorised"} (${r.data.asked ?? "not asked"})` : r.text ?? "The call failed.", r.ok ? "ok" : "err");
       } else if (kind === "sampling") {
-        const r = await api.post<{ ok: boolean; data: { processed: number; categorized: number; provider: string } }>("/mcp/call", { name: "categorize_uncategorized", arguments: { limit: 20 } });
-        toast(r.ok ? `${r.data.categorized} of ${r.data.processed} filed via ${r.data.provider}` : "The call failed.");
+        const r = await api.post<{ ok: boolean; text: string | null; data: { processed: number; categorized: number; provider: string } }>("/mcp/call", { name: "categorize_uncategorized", arguments: { limit: 20 } });
+        if (!r.ok) toast(r.text ?? "The call failed.", "err");
+        // Nothing uncategorised means nothing to ask the model about, so no sampling round happens at all.
+        else if (r.data.processed === 0) toast("Nothing uncategorised right now — add one with an unfamiliar merchant, then run this again.");
+        else toast(`${r.data.categorized} of ${r.data.processed} filed via ${r.data.provider}`);
       } else if (kind === "roots") {
         const r = await api.post<{ ok: boolean; text: string | null }>("/mcp/call", { name: "parse_statement", arguments: { file_path: "/etc/hosts" } });
-        toast(r.ok ? "Read it (the client declared no roots)" : "Refused: /etc/hosts is outside the client's roots", r.ok ? undefined : "err");
+        // Being turned away IS the demo: the server asked this client for its roots and honoured the answer.
+        toast(r.ok ? "Unexpected: /etc/hosts was read, so this client declared no roots." : "Refused, as it should be: /etc/hosts is outside this client's roots.", r.ok ? "err" : "ok");
       } else if (kind === "progress") {
-        const r = await api.post<{ ok: boolean }>("/mcp/call", { name: "categorize_uncategorized", arguments: { limit: 5 } });
-        toast(r.ok ? "Watch the progress notifications in the trace." : "The call failed.");
+        const r = await api.post<{ ok: boolean; text: string | null; data: { processed: number } }>("/mcp/call", { name: "categorize_uncategorized", arguments: { limit: 5 } });
+        if (!r.ok) toast(r.text ?? "The call failed.", "err");
+        else toast(r.data.processed ? "Watch the progress notifications in the trace." : "Nothing to work through, so there was no progress to report.");
       }
     } catch (e) {
       toast(e instanceof Error ? e.message : "Failed", "err");
@@ -284,7 +291,7 @@ export default function Mcp() {
               <b className="cap-n">{c.kind === "progress" ? (stats?.by_kind.progress ?? 0) + (stats?.by_kind.log ?? 0) : stats?.by_kind[c.kind] ?? 0}</b>
             </div>
             <p className="small muted">{c.body}</p>
-            {c.kind === "sampling" && !offered("sampling") && <p className="micro muted">Off: no ANTHROPIC_API_KEY, so the server falls back to its own rules.</p>}
+            {c.kind === "sampling" && !offered("sampling") && <p className="micro muted">Off: no model configured (ANTHROPIC_API_KEY or OPENROUTER_API_KEY), so the server falls back to its own rules.</p>}
             {c.kind === "completion" && <Completion />}
             {c.kind === "subscription" && (
               <div className="cap-try updates">{updates.length ? updates.map((u) => <span key={u.uri} className="mono micro">{u.uri.replace("finmcp://", "")}</span>) : <span className="micro muted">Listening to {overview.data?.subscribed.length ?? 11} resources…</span>}</div>
@@ -292,7 +299,7 @@ export default function Mcp() {
             {["elicitation", "sampling", "roots", "progress"].includes(c.kind) && (
               <button className="btn sm" disabled={busy !== null} onClick={() => tryIt(c.kind)}>
                 {busy === c.kind ? <Spinner /> : <Icon name="bolt" />}
-                {c.kind === "elicitation" ? "Add a mystery ₹349 purchase" : c.kind === "sampling" ? "Categorise what's left" : c.kind === "roots" ? "Try to read /etc/hosts" : "Run a bulk job"}
+                {c.kind === "elicitation" ? "Add a mystery ₹349 purchase" : c.kind === "sampling" ? "Categorise what's left" : c.kind === "roots" ? "Try to read a file outside the roots" : "Run a bulk job"}
               </button>
             )}
           </div>

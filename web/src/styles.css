@@ -204,8 +204,26 @@ button { cursor: pointer; }
 
 .main { min-width: 0; }
 .topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 16px; padding: 14px 32px; background: rgba(244, 245, 247, 0.85); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
-.topbar .qa-trigger { flex: 1; max-width: 720px; }
 .topbar .engine { margin-left: auto; }
+.topbar-add { flex: none; height: 44px; border-radius: 999px; white-space: nowrap; padding: 0 18px; }
+
+/* The same add action, under the thumb. Phones only: on a desktop the top bar is already within reach. */
+.fab { display: none; position: fixed; right: 16px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 30; width: 56px; height: 56px; border: 0; border-radius: 50%; background: var(--ink); color: #fff; align-items: center; justify-content: center; box-shadow: 0 16px 34px -12px rgba(12, 18, 34, .6); cursor: pointer; }
+.fab svg { width: 24px; height: 24px; }
+.fab .lbl { display: none; }
+
+/* Search. Not an add box: what you type here narrows Transactions, and the buttons beside it do the adding. */
+.omni { position: relative; flex: 1; min-width: 0; max-width: 520px; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 8px 0 15px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line-2); box-shadow: var(--shadow); transition: border-color .2s, box-shadow .2s; }
+.omni.on { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow); }
+.omni .lead { width: 18px; height: 18px; flex: none; color: var(--ink-3); transition: color .2s; }
+.omni.on .lead { color: var(--accent); }
+.omni input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; outline: none; font-family: inherit; font-size: 14px; color: var(--ink-1); }
+.omni input::placeholder { color: var(--ink-4); }
+.omni .kbd { flex: none; }
+.omni-x { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--ink-3); cursor: pointer; transition: background .2s, color .2s; }
+.omni-x:hover { background: var(--accent-soft); color: var(--accent); }
+.omni-x svg { width: 13px; height: 13px; }
+.omni-hint { position: absolute; left: 16px; top: calc(100% + 8px); font-size: 12px; color: var(--ink-3); background: var(--surface); border: 1px solid var(--line-2); border-radius: 8px; padding: 5px 10px; box-shadow: var(--shadow); pointer-events: none; }
 .content { padding: 12px 32px 48px; max-width: 1120px; margin: 0 auto; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 8px 0 20px; flex-wrap: wrap; }
 .page-head .sub { color: var(--ink-3); font-size: 14px; margin-top: 4px; }
@@ -460,8 +478,14 @@ button { cursor: pointer; }
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
   .sidebar { display: none; }
-  .topbar { padding: 10px 16px; }
+  .topbar { padding: 10px 12px; gap: 8px; }
   .topbar .engine { display: none; }
+  .omni { height: 42px; max-width: none; padding-left: 13px; }
+  .omni .kbd { display: none; }
+  .omni-hint { left: auto; right: 0; }
+  .topbar-add { height: 42px; width: 42px; padding: 0; justify-content: center; }
+  .topbar-add .lbl { display: none; }
+  .fab { display: flex; }
   .content { padding: 8px 16px calc(96px + env(safe-area-inset-bottom)); }
   .grid.two, .grid.three, .grid.wide-left { grid-template-columns: 1fr; }
   .tool-grid { grid-template-columns: 1fr; }
@@ -646,11 +670,6 @@ button { cursor: pointer; }
 @media (max-width: 560px) { .where { grid-template-columns: 1fr; justify-items: center; } .where-list { width: 100%; } }
 
 /* Quick add: the trigger in the top bar and the card it opens */
-.qa-trigger { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 10px 0 16px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line-2); box-shadow: var(--shadow); color: var(--ink-4); font-size: 14px; text-align: left; cursor: text; transition: border-color .2s, box-shadow .2s, transform .25s cubic-bezier(.22,1,.36,1); min-width: 0; }
-.qa-trigger:hover { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow); }
-.qa-trigger:active { transform: scale(.99); }
-.qa-trigger .lead { width: 18px; height: 18px; color: var(--ink-3); flex: none; }
-.qa-trigger .ph { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qa-backdrop { position: fixed; inset: 0; z-index: 70; background: rgba(12, 18, 34, .38); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; place-items: start center; padding: 12vh 16px 16px; }
 .qa-card { width: min(560px, 100%); background: var(--surface); border-radius: 28px; padding: 22px 24px 20px; box-shadow: 0 40px 90px -30px rgba(12, 18, 34, .45), 0 0 0 1px var(--line); display: flex; flex-direction: column; gap: 14px; }
 .qa-head { display: flex; align-items: center; justify-content: space-between; }

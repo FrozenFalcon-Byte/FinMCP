@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { AddButton } from "../components/QuickAdd";
 import { useToast } from "../components/Toast";
 import { Avatar, Chip, Empty, ErrorBox, Icon, PageHead, Sheet, Skeleton, Spinner } from "../components/ui";
 import { isFresh, peek, put } from "../lib/cache";
@@ -23,7 +24,6 @@ export default function Transactions() {
   const search = params.get("search") ?? params.get("merchant") ?? "";
   const direction = params.get("direction") ?? "";
   const review = params.get("needs_review_only") === "true";
-  const [q, setQ] = useState(search);
   const [cats, setCats] = useState<Category[]>([]);
   const [rows, setRows] = useState<Transaction[]>([]);
   const [total, setTotal] = useState(0);
@@ -39,13 +39,6 @@ export default function Transactions() {
     next.delete("merchant");
     setParams(next, { replace: true });
   };
-
-  useEffect(() => { setQ(search); }, [search]);
-  useEffect(() => {
-    const t = setTimeout(() => { if (q !== search) set("search", q || null); }, 300);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
 
   useEffect(() => {
     const cached = peek<Category[]>("categories");
@@ -135,11 +128,11 @@ export default function Transactions() {
   return (
     <>
       <PageHead title="Transactions" sub={loading && !rows.length ? "Loading…" : `${total.toLocaleString("en-IN")} in ${PERIODS.find((p) => p.value === period)?.label.toLowerCase() ?? period}`}>
+        <AddButton className="btn sm primary" label="Add" />
         <button className="btn sm" onClick={() => void api.download(`/export.csv${period !== "all time" ? `?period=${encodeURIComponent(period)}` : ""}`, "finmcp-transactions.csv")}><Icon name="download" />CSV</button>
         {review ? <button className="btn sm primary" onClick={() => void categorizeRest()} disabled={busy}><Icon name="wand" />Categorise the rest</button> : null}
       </PageHead>
       <div className="filters">
-        <div className="search"><Icon name="search" /><input className="input" placeholder="Search merchant or note" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <select className="select" value={period} onChange={(e) => set("period", e.target.value)}>
           {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
         </select>
@@ -148,6 +141,7 @@ export default function Transactions() {
           {cats.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
         <div className="chips">
+          {search ? <Chip on tone="accent" onClick={() => set("search", null)} title="Clear the search"><Icon name="search" />“{search}”<Icon name="x" /></Chip> : null}
           <Chip onClick={() => set("direction", direction === "debit" ? null : "debit")} on={direction === "debit"}>Money out</Chip>
           <Chip onClick={() => set("direction", direction === "credit" ? null : "credit")} on={direction === "credit"}>Money in</Chip>
           <Chip onClick={() => set("needs_review_only", review ? null : "true")} on={review} tone="warn">Needs review</Chip>

@@ -2,9 +2,10 @@ import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { ElicitationHost } from "./components/Elicitation";
-import { QuickAdd } from "./components/QuickAdd";
 import { CurtainProvider } from "./components/Curtain";
+import { AddButton, AddProvider } from "./components/QuickAdd";
 import { SignOutButton } from "./components/SignOut";
+import { TopBar } from "./components/TopBar";
 import { ToastProvider } from "./components/Toast";
 import { WakeProvider } from "./components/Wake";
 import { Avatar, Chip, Icon, Sheet, type IconName } from "./components/ui";
@@ -128,13 +129,11 @@ function Shell() {
   return (
     <StatusProvider>
       <LedgerProvider>
+        <AddProvider>
         <div className="shell">
           <Sidebar />
           <main className="main">
-            <div className="topbar">
-              <QuickAdd />
-              <span className="engine"><EngineChip /></span>
-            </div>
+            <TopBar><span className="engine"><EngineChip /></span></TopBar>
             <div className="content">
               <AnimatePresence mode="wait" initial={false} onExitComplete={toTop}>
                 <motion.div key={location.pathname} {...PAGE}>
@@ -160,8 +159,11 @@ function Shell() {
             </div>
           </main>
           <ElicitationHost />
+          {/* Under the thumb on a phone, where the top bar is a stretch. */}
+          <AddButton className="fab" label="Add" />
           <TabBar />
         </div>
+        </AddProvider>
       </LedgerProvider>
     </StatusProvider>
   );

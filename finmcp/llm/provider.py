@@ -164,7 +164,7 @@ class AnthropicProvider:
 
     def categorize(self, *, merchant: str, description: str | None, amount: float, direction: str,
                    categories: list[Category], examples: list[dict[str, Any]] | None = None) -> CategoryGuess | None:
-        cat_lines = "\n".join(f"- {c.name} ({c.kind}): {c.description or ''}" for c in categories)
+        cat_lines = _category_lines(categories)
         example_lines = ""
         if examples:
             example_lines = "\nPreviously confirmed by the user:\n" + "\n".join(
@@ -242,20 +242,31 @@ def get_provider(settings: Settings) -> LLMProvider:
 __all__ = ["AnthropicProvider", "OpenRouterProvider", "CategoryGuess", "ExtractedTransaction", "LLMError", "LLMProvider", "ReceiptExtraction", "RuleBasedProvider", "SQLGuess", "UnsupportedQuestion", "get_provider"]
 
 
+def _category_lines(categories: list[Category]) -> str:
+    """The category list as a model sees it. The name stands alone on its line: the older
+    "- Name (kind): description" shape invited smaller models to answer with the decoration attached, and
+    "Other (expense)" is not a category — every such guess was dropped, so nothing got filed."""
+    return "\n".join(
+        f"- {c.name}" + (f"  [{c.kind}]" if c.kind else "") + (f" — {c.description}" if c.description else "")
+        for c in categories
+    )
+
+
 SAMPLING_SYSTEM = ("You categorise personal-finance transactions. Pick exactly one category name from the list for each "
                    "transaction. Reply with JSON only.")
 
 
 def sampling_prompt(items: list[dict[str, Any]], categories: list[Category], examples: list[dict[str, Any]] | None = None) -> str:
     """One prompt for a batch of transactions, so a single `sampling/createMessage` round trip covers them all."""
-    cat_lines = "\n".join(f"- {c.name} ({c.kind}): {c.description or ''}" for c in categories)
+    cat_lines = _category_lines(categories)
     example_lines = ""
     if examples:
         example_lines = "\nPreviously confirmed by the user:\n" + "\n".join(f"- {e['merchant']} -> {e['category']}" for e in examples[:20])
     tx_lines = "\n".join(f"{n}. merchant: {it['merchant']} | narration: {it.get('description') or '(none)'} | amount: {float(it['amount']):.2f} | "
                          f"{it['direction']}" for n, it in enumerate(items, 1))
     return (f"Transactions:\n{tx_lines}\n\nCategories:\n{cat_lines}{example_lines}\n\n"
-            'Reply with JSON only, one entry per transaction number: '
+            'Reply with JSON only, one entry per transaction number. "category" is one of the names above, copied '
+            'exactly, with nothing added — no kind, no description, no brackets.\n'
             '{"1": {"category": "<exact name from the list>", "confidence": <0..1>, "reasoning": "<one short sentence>"}}')
 
 
