@@ -1,0 +1,14 @@
+.git
+.venv
+web
+data
+tests
+fixtures
+scripts
+.claude
+.pytest_cache
+.ruff_cache
+*.egg-info
+__pycache__
+.env
+.hf-space

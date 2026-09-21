@@ -23,5 +23,9 @@ data/*.db-*
 web/node_modules/
 web/dist/
 
+# Deploy
+.hf-space/
+web/.vercel/
+
 # OS
 .DS_Store

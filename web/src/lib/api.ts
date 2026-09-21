@@ -13,6 +13,11 @@ export class ApiError extends Error {
 
 type Params = Record<string, string | number | boolean | null | undefined>;
 
+/** Where the API lives. Empty (same origin) in dev and when the API serves the built app; an absolute origin
+ *  when the frontend is deployed on its own (Vercel) and the backend somewhere else (Hugging Face Space). */
+export const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/+$/, "");
+export const apiUrl = (path: string): string => `${API_BASE}/api${path}`;
+
 let authToken: string | null = null;
 export function setAuthToken(token: string | null): void {
   authToken = token;
@@ -55,16 +60,16 @@ async function handle<T>(res: Response): Promise<T> {
 const json = () => ({ "Content-Type": "application/json", ...authHeaders() });
 
 export const api = {
-  get: <T>(path: string, params?: Params) => tracked(`/api${path}${qs(params)}`, { headers: authHeaders() }).then((r) => handle<T>(r)),
+  get: <T>(path: string, params?: Params) => tracked(`${apiUrl(path)}${qs(params)}`, { headers: authHeaders() }).then((r) => handle<T>(r)),
   post: <T>(path: string, body?: unknown, params?: Params) =>
-    tracked(`/api${path}${qs(params)}`, { method: "POST", headers: json(), body: body === undefined ? undefined : JSON.stringify(body) }).then((r) => handle<T>(r)),
-  patch: <T>(path: string, body: unknown) => tracked(`/api${path}`, { method: "PATCH", headers: json(), body: JSON.stringify(body) }).then((r) => handle<T>(r)),
-  put: <T>(path: string, body: unknown) => tracked(`/api${path}`, { method: "PUT", headers: json(), body: JSON.stringify(body) }).then((r) => handle<T>(r)),
-  del: <T>(path: string) => tracked(`/api${path}`, { method: "DELETE", headers: authHeaders() }).then((r) => handle<T>(r)),
-  upload: <T>(path: string, form: FormData) => tracked(`/api${path}`, { method: "POST", body: form, headers: authHeaders() }).then((r) => handle<T>(r)),
+    tracked(`${apiUrl(path)}${qs(params)}`, { method: "POST", headers: json(), body: body === undefined ? undefined : JSON.stringify(body) }).then((r) => handle<T>(r)),
+  patch: <T>(path: string, body: unknown) => tracked(apiUrl(path), { method: "PATCH", headers: json(), body: JSON.stringify(body) }).then((r) => handle<T>(r)),
+  put: <T>(path: string, body: unknown) => tracked(apiUrl(path), { method: "PUT", headers: json(), body: JSON.stringify(body) }).then((r) => handle<T>(r)),
+  del: <T>(path: string) => tracked(apiUrl(path), { method: "DELETE", headers: authHeaders() }).then((r) => handle<T>(r)),
+  upload: <T>(path: string, form: FormData) => tracked(apiUrl(path), { method: "POST", body: form, headers: authHeaders() }).then((r) => handle<T>(r)),
   /** Fetch a file (CSV export) and hand it to the browser as a download. */
   download: async (path: string, filename: string) => {
-    const res = await tracked(`/api${path}`, { headers: authHeaders() });
+    const res = await tracked(apiUrl(path), { headers: authHeaders() });
     if (!res.ok) await handle(res);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -77,7 +82,7 @@ export const api = {
 };
 
 export async function streamChat(message: string, conversationId: string | null, onEvent: (ev: ChatEvent) => void, signal?: AbortSignal): Promise<void> {
-  const res = await fetch("/api/chat", {
+  const res = await fetch(apiUrl("/chat"), {
     method: "POST",
     headers: json(),
     body: JSON.stringify({ message, conversation_id: conversationId ?? undefined }),

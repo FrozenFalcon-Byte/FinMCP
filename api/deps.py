@@ -21,6 +21,7 @@ import copy
 import dataclasses
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -42,7 +43,7 @@ from finmcp.subscriptions import ALL_RESOURCES, buses
 from .auth import Authenticator, RateLimiter, bearer_from_header
 
 log = logging.getLogger("finmcp.api")
-UPLOAD_ROOT = ROOT / "data" / "uploads"
+UPLOAD_ROOT = Path(os.environ.get("FINMCP_DATA_DIR") or (ROOT / "data")) / "uploads"
 CACHE_TTL = 90.0  # seconds; writes from this process invalidate at once, the TTL covers other writers (scripts, SQL)
 
 

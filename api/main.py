@@ -25,6 +25,15 @@ from .routes import auth, chat, connect, events, imports, ledger, mcp
 log = logging.getLogger("finmcp.api")
 WEB_DIST = ROOT / "web" / "dist"
 
+DEV_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
+
+
+def cors_origins() -> list[str]:
+    """Browser origins allowed to call this API. The frontend is deployed separately (Vercel), so its origin
+    has to be named here: FINMCP_CORS_ORIGINS, comma separated. Dev origins are always allowed."""
+    extra = [o.strip().rstrip("/") for o in os.environ.get("FINMCP_CORS_ORIGINS", "").split(",") if o.strip()]
+    return list(dict.fromkeys([*DEV_ORIGINS, *extra]))
+
 
 class _MountedMCP:
     """Forwards /mcp to the MCP app built in the lifespan (the registry does not exist at import time)."""
@@ -64,8 +73,9 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="FinMCP API", version=__version__, lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json")
-    app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=True,
-                       allow_methods=["*"], allow_headers=["*"], expose_headers=["mcp-session-id", "mcp-protocol-version"])
+    app.add_middleware(CORSMiddleware, allow_origins=cors_origins(), allow_origin_regex=os.environ.get("FINMCP_CORS_ORIGIN_REGEX") or None,
+                       allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
+                       expose_headers=["mcp-session-id", "mcp-protocol-version"])
     app.include_router(auth.router, prefix="/api")
     app.include_router(chat.router, prefix="/api")
     app.include_router(ledger.router, prefix="/api")

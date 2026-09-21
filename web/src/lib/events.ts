@@ -1,5 +1,5 @@
 /* The account's change feed over server-sent events (fetch-based so the bearer token travels in a header). */
-import { authHeaders } from "./api";
+import { apiUrl, authHeaders } from "./api";
 
 export interface LedgerEvent {
   type: string;
@@ -19,7 +19,7 @@ export function subscribeEvents(onEvent: (ev: LedgerEvent) => void, onState: (li
     while (!stopped) {
       controller = new AbortController();
       try {
-        const res = await fetch("/api/events", { headers: { Accept: "text/event-stream", ...authHeaders() }, signal: controller.signal });
+        const res = await fetch(apiUrl("/events"), { headers: { Accept: "text/event-stream", ...authHeaders() }, signal: controller.signal });
         if (!res.ok || !res.body) {
           if (res.status === 401) window.dispatchEvent(new Event("finmcp:unauthorized"));
           throw new Error(`events ${res.status}`);

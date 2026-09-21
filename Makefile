@@ -1,4 +1,4 @@
-.PHONY: account setup dev api web build test lint e2e pg pg-stop migrate seed server agent fixtures demo-account
+.PHONY: deploy-hf account setup dev api web build test lint e2e pg pg-stop migrate seed server agent fixtures demo-account
 
 PY := .venv/bin/python
 
@@ -52,3 +52,6 @@ fixtures:         ## regenerate synthetic statement/receipt/SMS fixtures
 
 e2e:              ## end-to-end smoke: MCP transports, agent, API, remote MCP endpoint
 	$(PY) scripts/e2e.py
+
+deploy-hf:        ## sync the backend into a Hugging Face Space and push: SPACE=<user>/<space>
+	scripts/deploy_hf.sh "$(SPACE)"
