@@ -172,6 +172,17 @@ class NewTransaction(BaseModel):
     ask_if_unsure: bool = True
 
 
+class EntryText(BaseModel):
+    text: str = Field(min_length=1, max_length=300)
+    merchant: str | None = None
+
+
+@router.post("/transactions/parse")
+async def parse_entry(body: EntryText, ctx: AppContext = Depends(get_ctx)) -> Any:
+    """What the quick-add card asks when its own reading of a line is only a guess. Read-only, and cached per line."""
+    return await call_tool(ctx, "parse_entry", body.model_dump(exclude_none=True))
+
+
 @router.post("/transactions", status_code=201)
 async def add_transaction(body: NewTransaction, ctx: AppContext = Depends(get_ctx)) -> Any:
     return await call_tool(ctx, "add_transaction", body.model_dump(exclude_none=True))

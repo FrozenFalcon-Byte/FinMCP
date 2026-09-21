@@ -3,6 +3,8 @@
 import { isoLocal } from "./format";
 
 export interface QuickAddDraft {
+  /** The line as typed, tidied. The card sends this on when it wants a second opinion. */
+  raw: string;
   amount: number | null;
   merchant: string;
   direction: "debit" | "credit";
@@ -11,12 +13,22 @@ export interface QuickAddDraft {
   category: string | null;
   description: string | null;
   valid: boolean;
+  /** How sure the direction is, 0-1, and what settled it. Below ~0.8 the card asks the server for a better answer. */
+  confidence: number;
+  source: DirectionSource;
 }
+
+export type DirectionSource = "sign" | "words" | "grammar" | "default" | "history" | "model" | "you";
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-const CREDIT_HINT = /\b(received|credited|got|refund(?:ed)?|cashback|salary|income|reimburse(?:d|ment)?|paid me|deposit(?:ed)?|dividend|interest)\b/i;
-const CREDIT_DROP = /\b(received|credited|got|paid me|deposited)\b/gi;
+/* Which way the money went. Not a list of income words — those run out at the second sentence anyone types — but
+   the frame the line is in: you pay *to* or *at* someone and you are paid *from* them, and a verb of receiving beats
+   a preposition. What the reading cannot settle, `source` and `confidence` say so, and the card asks the server
+   (history, then the model) and lets you flip it by hand. */
+const EARN = /\b(received|credited|got|refund(?:ed)?|cashback|salary|stipend|bonus|income|reimburse(?:d|ment)?|paid me|sent me|gave me|deposit(?:ed)?|dividend|interest|earned|sold|payout|winnings?|settled up|repaid)\b/i;
+const SPEND = /\b(paid(?!\s+me)|pay(?!\s+me)|spent|spend|bought|buy|sent(?!\s+me)|gave(?!\s+me)|bill|billed|recharge[ds]?|ordered|subscription|renewed|topped up|donated|lent)\b/i;
+const CREDIT_DROP = /\b(received|credited|got|paid me|sent me|gave me|deposited|earned)\b/gi;
 const LEAD_FILLER = /^(?:at|to|for|from|on|paid|pay|spent|bought|via|the|a|an|of|in|by|with|and|-|–|:)\s+/i;
 const TRAIL_FILLER = /\s+(?:at|to|for|from|on|via|the|in|by|with|and|-|–|:)$/i;
 
@@ -30,7 +42,7 @@ function fmtDay(d: Date, today: Date): string {
   return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
 }
 
-function titleCase(s: string): string {
+export function titleCase(s: string): string {
   return s.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
 
@@ -46,9 +58,27 @@ export function parseQuickAdd(raw: string, categories: string[] = [], today = ne
   text = text.replace(/\(([^)]*)\)/, (_m, n: string) => { description = n.trim() || null; return " "; });
   text = text.replace(/\s(?:note|memo):\s*(.+)$/i, (_m, n: string) => { description = n.trim(); return " "; });
 
-  // direction: leading "+" or an income word
-  if (/^\+/.test(text)) { direction = "credit"; text = text.replace(/^\+\s*/, ""); }
-  else if (CREDIT_HINT.test(text)) { direction = "credit"; text = text.replace(CREDIT_DROP, " "); }
+  // direction: a sign you typed, else the shape of the sentence
+  let confidence = 0.25;
+  let source: DirectionSource = "default";
+  if (/^[+-]/.test(text)) {
+    direction = text.startsWith("+") ? "credit" : "debit";
+    confidence = 1;
+    source = "sign";
+    text = text.replace(/^[+-]\s*/, "");
+  } else {
+    // Verbs carry more weight than prepositions, so "paid 500 from hdfc" stays money out while "890 from company"
+    // leans money in. A score of 0 means the line simply does not say, and most of those are spends.
+    let score = 0;
+    if (EARN.test(text)) score += 2;
+    if (SPEND.test(text)) score -= 2;
+    if (/\bfrom\b/i.test(text)) score += 1;
+    if (/\b(?:to|at)\b/i.test(text)) score -= 1;
+    direction = score > 0 ? "credit" : "debit";
+    confidence = Math.abs(score) >= 2 ? 0.85 : Math.abs(score) === 1 ? 0.55 : 0.25;
+    source = Math.abs(score) >= 2 ? "words" : Math.abs(score) === 1 ? "grammar" : "default";
+    if (direction === "credit") text = text.replace(CREDIT_DROP, " ");
+  }
 
   // category: #tag, #"Two Words", or a trailing "in <Category>"
   const lower = categories.map((c) => c.toLowerCase());
@@ -125,7 +155,7 @@ export function parseQuickAdd(raw: string, categories: string[] = [], today = ne
   if (!merchant && direction === "credit" && amount) merchant = "Income";
 
   return {
-    amount, merchant, direction, date: isoLocal(date), dateLabel, category, description,
+    raw: raw.replace(/\s+/g, " ").trim(), amount, merchant, direction, date: isoLocal(date), dateLabel, category, description, confidence, source,
     valid: amount !== null && amount > 0 && merchant.length > 0,
   };
 }

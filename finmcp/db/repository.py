@@ -94,6 +94,11 @@ def merchant_key(merchant: str) -> str:
     return s[:60]
 
 
+def _same_merchant(a: str, b: str) -> bool:
+    """'Company' and 'Company Ltd' are the same counterparty; 'Swiggy' and 'Swiggy Instamart' are close enough."""
+    return bool(a) and bool(b) and (a == b or a.startswith(b) or b.startswith(a))
+
+
 def fingerprint_for(date: str, amount: float, direction: str, merchant: str, raw_text: str | None = None) -> str:
     basis = "|".join([date, f"{float(amount):.2f}", direction, merchant_key(merchant), (raw_text or "").strip().lower()[:120]])
     return hashlib.sha1(basis.encode("utf-8")).hexdigest()[:24]
@@ -469,6 +474,20 @@ class Repository:
                ORDER BY date ASC, id ASC""",
             (self.user_id, days),
         )
+
+    def merchant_history(self, merchant: str, limit: int = 60) -> list[dict[str, Any]]:
+        """Recent entries whose merchant reads like this one, newest first.
+
+        This account's own record of whether money at that name goes out or comes in. The key normalises
+        'SWIGGY*ORDER 8812' and 'Swiggy' onto one name, so the first word narrows the scan and the key decides."""
+        key = merchant_key(merchant)
+        if not key:
+            return []
+        rows = self._all(
+            "SELECT merchant, direction FROM v_transactions WHERE user_id = %s AND merchant ILIKE %s ORDER BY date DESC LIMIT %s",
+            (self.user_id, f"%{key.split(' ')[0]}%", max(1, min(int(limit), 200))),
+        )
+        return [r for r in rows if _same_merchant(key, merchant_key(str(r["merchant"])))]
 
     # ---------------------------------------------------------------- merchant memory
 

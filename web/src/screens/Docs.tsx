@@ -39,6 +39,7 @@ const CLIENTS: { id: ClientId; label: string; sub: string }[] = [
 const GROUPS: { h: string; i: IconName; tools: [string, string][] }[] = [
   { h: "Ledger", i: "list", tools: [
     ["add_transaction", "Add one transaction. Categorised on the way in."],
+    ["parse_entry", "Read a typed line — money in or money out, and who. History first, the model when unsure."],
     ["update_transaction", "Change an amount, merchant, date, note or category."],
     ["delete_transaction", "Remove one, by id."],
     ["list_transactions", "Filter by month, category, merchant or amount range."],
@@ -108,7 +109,7 @@ const PROMPTS: [string, string][] = [
 ];
 
 const PROTOCOL: { h: string; dir: string; p: string }[] = [
-  { h: "Tools", dir: "client → server", p: "27 of them. Every read and every write in the app is one of these calls — the screens you use are just another MCP client." },
+  { h: "Tools", dir: "client → server", p: "28 of them. Every read and every write in the app is one of these calls — the screens you use are just another MCP client." },
   { h: "Resources", dir: "client → server", p: "13 live views of your ledger, including a templated one for any month. Hosts can read them without calling a tool." },
   { h: "Prompts", dir: "client → server", p: "Four ready-made conversations, so a host can offer them as slash commands." },
   { h: "Elicitation", dir: "server → client", p: "When a category is genuinely ambiguous the server pauses the tool call and asks. In this app that surfaces as a dialog; in Claude Desktop, as a question." },

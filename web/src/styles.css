@@ -681,7 +681,11 @@ button { cursor: pointer; }
 .qa-amount .num { font-size: 44px; font-weight: 800; letter-spacing: -.035em; line-height: 1.1; color: var(--ink); }
 .qa-amount .num.empty { color: var(--line-2); }
 .qa-card.in .qa-amount .num:not(.empty) { color: var(--good); }
-.qa-dir { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: var(--ink-3); }
+.qa-dir { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: var(--ink-3);
+  border: 0; cursor: pointer; display: inline-flex; align-items: center; overflow: hidden; transition: background .18s ease, color .18s ease; }
+.qa-dir:hover { background: var(--line); }
+.qa-card.in .qa-dir:hover { background: var(--good); color: #fff; }
+.qa-why { font-size: 12px; color: var(--ink-4); opacity: .75; margin-left: 6px; }
 .qa-card.in .qa-dir { background: var(--good-soft); color: var(--good); }
 .qa-merchant { font-size: 15px; color: var(--ink-3); min-height: 22px; margin-top: -8px; }
 .qa-merchant b { color: var(--ink); font-weight: 700; }

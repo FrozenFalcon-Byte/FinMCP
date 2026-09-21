@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
 import { useLedger } from "../lib/ledger";
-import { QUICK_ADD_EXAMPLES, parseQuickAdd } from "../lib/quickadd";
+import { QUICK_ADD_EXAMPLES, parseQuickAdd, titleCase, type DirectionSource, type QuickAddDraft } from "../lib/quickadd";
 import { useStatus } from "../lib/status";
 import type { Category, Transaction } from "../lib/types";
 import { useToast } from "./Toast";
@@ -55,6 +55,65 @@ export function AddButton({ className = "btn sm primary", label = "Add" }: { cla
   );
 }
 
+type Dir = "debit" | "credit";
+interface Refine { line: string; direction: Dir | null; merchant: string | null; amount: number | null; confidence: number; source: DirectionSource }
+
+const SURE = 0.8;          // above this the line says which way it went plainly enough
+const ASK_AFTER_MS = 450;  // a pause in the typing, not a keystroke
+const WHY: Record<DirectionSource, string> = {
+  sign: "you typed the sign",
+  words: "from how you put it",
+  grammar: "from how you put it",
+  default: "assumed — tap to flip",
+  history: "how you always file this one",
+  model: "read by the model",
+  you: "your call",
+};
+
+/** The card's reading of a line, in three layers.
+
+    The local parse is instant and offline. When it is only guessing at the direction, the server is asked once the
+    typing settles — what this account has done at that merchant before, and failing that the model — so a phrasing
+    nobody wrote a rule for still lands the right way round. A tap on the chip beats both and stops the asking. */
+function useReading(open: boolean, draft: QuickAddDraft) {
+  const [remote, setRemote] = useState<Refine | null>(null);
+  const [mine, setMine] = useState<Dir | null>(null);
+  const [thinking, setThinking] = useState(false);
+
+  useEffect(() => { setRemote(null); setMine(null); setThinking(false); }, [open]);
+  // Your call is about one counterparty. Type a different one and the card goes back to reading the line.
+  useEffect(() => { setMine(null); }, [draft.merchant]);
+
+  // Worth asking when the direction is a guess, and also when the line defeated the local parse altogether
+  // ("two thousand from mom" has no number in it). Short fragments mid-typing are left alone.
+  const ask = open && mine === null && draft.raw.length >= 6 && (!draft.valid || draft.confidence < SURE);
+  const text = draft.raw;
+  const merchant = draft.merchant;
+  useEffect(() => {
+    if (!ask) return;
+    const t = window.setTimeout(() => {
+      setThinking(true);
+      api.post<Omit<Refine, "line">>("/transactions/parse", { text, merchant })
+        .then((r) => setRemote({ ...r, line: text }))
+        .catch(() => undefined)          // the line still reads fine on its own
+        .finally(() => setThinking(false));
+    }, ASK_AFTER_MS);
+    return () => window.clearTimeout(t);
+  }, [ask, text, merchant]);
+
+  const fit = remote && remote.line === text && remote.direction ? remote : null;
+  const direction: Dir = mine ?? fit?.direction ?? draft.direction;
+  const source: DirectionSource = mine ? "you" : fit ? fit.source : draft.source;
+  return {
+    direction,
+    source,
+    thinking: thinking && !mine,
+    merchant: draft.merchant || (fit?.merchant ? titleCase(fit.merchant.toLowerCase()) : ""),
+    amount: draft.amount ?? fit?.amount ?? null,
+    flip: () => setMine(direction === "credit" ? "debit" : "credit"),
+  };
+}
+
 function QuickAdd({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { currency } = useStatus();
   const { bump, version } = useLedger();
@@ -88,14 +147,16 @@ function QuickAdd({ open, onClose }: { open: boolean; onClose: () => void }) {
   }, [open]);
 
   const draft = useMemo(() => parseQuickAdd(text, cats), [text, cats]);
-  const credit = draft.direction === "credit";
+  const read = useReading(open, draft);
+  const credit = read.direction === "credit";
+  const valid = read.amount !== null && read.amount > 0 && read.merchant.length > 0;
 
   const submit = async () => {
-    if (!draft.valid || busy) return;
+    if (!valid || busy) return;
     setBusy(true);
     try {
       const r = await api.post<{ transaction: Transaction }>("/transactions", {
-        date: draft.date, amount: draft.amount, merchant: draft.merchant, direction: draft.direction,
+        date: draft.date, amount: read.amount, merchant: read.merchant, direction: read.direction,
         description: draft.description ?? undefined, category: draft.category ?? undefined, source: "manual",
       });
       const tx = r.transaction;
@@ -137,19 +198,34 @@ function QuickAdd({ open, onClose }: { open: boolean; onClose: () => void }) {
 
                 <div className="qa-amount">
                   <AnimatePresence mode="popLayout" initial={false}>
-                    <motion.span key={`${draft.amount ?? "none"}-${draft.direction}`} className={`num ${draft.amount ? "" : "empty"}`}
+                    <motion.span key={`${read.amount ?? "none"}-${read.direction}`} className={`num ${read.amount ? "" : "empty"}`}
                       initial={{ opacity: 0, y: 14, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -14, filter: "blur(4px)" }}
                       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
-                      {draft.amount ? `${credit ? "+" : "−"}${money(draft.amount, currency, 2)}` : money(0, currency)}
+                      {read.amount ? `${credit ? "+" : "−"}${money(read.amount, currency, 2)}` : money(0, currency)}
                     </motion.span>
                   </AnimatePresence>
-                  <motion.span className="qa-dir" layout transition={SPRING}>{credit ? "money in" : "money out"}</motion.span>
+                  {/* A guess you can overrule with one tap, which is the point of showing how it was arrived at. */}
+                  <motion.button type="button" className="qa-dir" layout transition={SPRING} onClick={read.flip}
+                    whileTap={{ scale: 0.94 }} aria-label={`${credit ? "Money in" : "Money out"} — tap to flip`} title="Tap to flip">
+                    <AnimatePresence mode="popLayout" initial={false}>
+                      <motion.span key={read.direction} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.16 }}>
+                        {credit ? "money in" : "money out"}
+                      </motion.span>
+                    </AnimatePresence>
+                  </motion.button>
                 </div>
                 <div className="qa-merchant">
                   <AnimatePresence mode="wait" initial={false}>
-                    <motion.span key={draft.merchant ?? ""} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
-                      {draft.merchant ? <>{credit ? "from" : "at"} <b>{draft.merchant}</b></> : "Who was it? Type a merchant"}
+                    <motion.span key={read.merchant} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
+                      {read.merchant ? <>{credit ? "from" : "at"} <b>{read.merchant}</b></> : "Who was it? Type a merchant"}
                     </motion.span>
+                  </AnimatePresence>
+                  <AnimatePresence initial={false}>
+                    {read.merchant ? (
+                      <motion.span className="qa-why" key={read.thinking ? "thinking" : read.source} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+                        · {read.thinking ? "checking…" : WHY[read.source]}
+                      </motion.span>
+                    ) : null}
                   </AnimatePresence>
                 </div>
 
@@ -175,9 +251,9 @@ function QuickAdd({ open, onClose }: { open: boolean; onClose: () => void }) {
                 </motion.div>
 
                 <div className="qa-foot">
-                  <span className="qa-hint">{text.trim() && !draft.valid ? "Needs an amount and a merchant" : "#category · (note) · yesterday · 12 sep · + for money in"}</span>
-                  <motion.button type="submit" className={`qa-go ${done ? "done" : ""}`} disabled={!draft.valid || busy || done}
-                    whileHover={draft.valid ? { scale: 1.04 } : undefined} whileTap={draft.valid ? { scale: 0.95 } : undefined} transition={SPRING}>
+                  <span className="qa-hint">{text.trim() && !valid ? "Needs an amount and a merchant" : "#category · (note) · yesterday · 12 sep · tap the chip to flip"}</span>
+                  <motion.button type="submit" className={`qa-go ${done ? "done" : ""}`} disabled={!valid || busy || done}
+                    whileHover={valid ? { scale: 1.04 } : undefined} whileTap={valid ? { scale: 0.95 } : undefined} transition={SPRING}>
                     <AnimatePresence mode="wait" initial={false}>
                       <motion.span key={done ? "done" : busy ? "busy" : "idle"} className="in" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
                         {done ? <><Icon name="check" />Added</> : busy ? <Spinner /> : <>Add <Icon name="enter" /></>}

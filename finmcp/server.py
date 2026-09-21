@@ -45,6 +45,7 @@ from .llm.prompts import schema_doc
 from .llm.provider import SAMPLING_SYSTEM, LLMProvider, RuleBasedProvider, SampledProvider, get_provider, parse_sampled, sampling_prompt
 from .services.categorize import NEEDS_REVIEW_BELOW, Categorizer
 from .services.emis import emi_report, emi_status
+from .services.entry import parse_entry as read_entry_line
 from .services.overview import get_overview
 from .services.periods import resolve_period
 from .services.recurring import list_recurring
@@ -477,6 +478,24 @@ def create_server(settings: Settings | None = None, *, db: Database | None = Non
             await ctx.info(f"{merchant} {st.currency} {amount:g} filed under {fresh.category or 'nothing yet'} "
                            f"({categorization.get('source') or 'user'}, confidence {categorization.get('confidence') or 0:.2f})")
         return {"transaction": _tx(fresh), "categorization": categorization, "asked": asked}
+
+    @server.tool(annotations=READ)
+    @_tool_errors
+    async def parse_entry(
+        ctx: Context,
+        text: Annotated[str, Field(min_length=1, max_length=300, description="The line as it was typed, e.g. '890 from company'")],
+        merchant: Annotated[str | None, Field(description="The merchant the caller already read out of the line, if it found one")] = None,
+    ) -> dict[str, Any]:
+        """Read a typed line: is it money in or money out, and who was it?
+
+        For the direction, which is the part a keyword list gets wrong. Answers from what this account has recorded
+        at that merchant before, and asks the model only when its own history has no opinion. `direction` comes back
+        null when neither knew, and the caller should keep its own reading."""
+        st = tenant(ctx)
+        guess = await anyio.to_thread.run_sync(lambda: read_entry_line(st.repo, st.provider, text, merchant))
+        if guess.direction:
+            await ctx.debug(f"{text!r} reads as {guess.direction} ({guess.source}, confidence {guess.confidence:.2f})")
+        return guess.as_dict()
 
     @server.tool(annotations=WRITE)
     @_tool_errors
