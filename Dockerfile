@@ -1,6 +1,6 @@
-# FinMCP backend — Hugging Face Spaces (Docker SDK, port 7860).
-# Ships the MCP server, the agent and the FastAPI layer. The React app is deployed separately (Vercel)
-# and reaches this container over CORS, so web/ is excluded here (see .dockerignore).
+# FinMCP backend. Ships the MCP server, the agent and the FastAPI layer; the React app is deployed
+# separately (Vercel) and reaches this container over CORS, so web/ is excluded here (see .dockerignore).
+# Binds $PORT when the host sets one (Render, Cloud Run) and 7860 otherwise (Hugging Face Spaces).
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -34,4 +34,4 @@ ENV HOME=/home/user \
 
 EXPOSE 7860
 # --timeout-keep-alive covers the SSE change feed (it heartbeats every 20s).
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "7860", "--timeout-keep-alive", "75", "--log-level", "info"]
+CMD ["sh", "-c", "exec uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-7860} --timeout-keep-alive 75 --log-level info"]

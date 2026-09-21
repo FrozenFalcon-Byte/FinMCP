@@ -91,6 +91,29 @@ Apply the schema with `make migrate` (or `supabase db push` if you use the Supab
 
 Local mode and Supabase mode share every line of ledger code; only the identity provider and the connection string differ.
 
+## Deploy
+
+The app runs as one process locally and as two services in production: the React app on Vercel, the API and
+MCP endpoint on a container host. Nothing in the ledger code changes — only where the browser sends requests
+and which origins the API answers.
+
+**Backend** (`Dockerfile`, port `$PORT` or `7860`). On Render, point a new Blueprint at `render.yaml` and fill
+in the secrets it declares; any Docker host works the same way. Set at least:
+
+| Variable | Value |
+| --- | --- |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_DB_URL` | from the Supabase dashboard (use a pooler URL) |
+| `FINMCP_PUBLIC_URL` | the deployed API's own URL, e.g. `https://finmcp-api.onrender.com` |
+| `FINMCP_CORS_ORIGINS` | the frontend's origin, e.g. `https://finmcp.vercel.app` |
+| `FINMCP_DATA_DIR` | a writable path; the image defaults to `/tmp/finmcp-data` |
+
+**Frontend** (`web/vercel.json`). Import the repo on Vercel with **Root Directory** `web`, and set
+`VITE_API_BASE` to the backend URL. Left unset, the app calls `/api` on its own origin, which is what the
+local single-process build and `make dev` rely on.
+
+A Hugging Face Space works too (`deploy/hf/README.md` carries the Spaces front-matter, `make deploy-hf
+SPACE=<user>/<space>` syncs the backend into it) — Docker Spaces need a PRO subscription.
+
 ## Connect an MCP client
 
 1. In the app, open **Connect** and create a token (`fm_...`). It is shown once.
@@ -135,7 +158,7 @@ Security notes: passwords are scrypt-hashed (local mode); MCP tokens are stored 
 ## Development
 
 ```bash
-make test       # 146 tests on a throwaway embedded Postgres; each test is its own account, RLS keeps them apart
+make test       # 164 tests on a throwaway embedded Postgres; each test is its own account, RLS keeps them apart
 make lint       # ruff + tsc
 make e2e        # stdio server, agent loop, API, remote MCP endpoint over real HTTP
 make web        # Vite dev server on :5173 (proxies /api and /mcp to :8000)

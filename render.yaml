@@ -1,0 +1,37 @@
+# Render blueprint for the FinMCP backend. The React app is deployed separately (Vercel).
+# Values marked `sync: false` are set once in the Render dashboard and never live in the repo.
+services:
+  - type: web
+    name: finmcp-api
+    runtime: docker
+    plan: free
+    region: singapore # nearest free region to the Supabase project (ap-southeast-2)
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: FINMCP_DATA_DIR
+        value: /tmp/finmcp-data
+      - key: FINMCP_CURRENCY
+        value: INR
+      # Public URL of this service; shown in the MCP config snippets under Connect.
+      - key: FINMCP_PUBLIC_URL
+        sync: false
+      # Origins allowed to call this API — the Vercel deployment.
+      - key: FINMCP_CORS_ORIGINS
+        sync: false
+      - key: FINMCP_CORS_ORIGIN_REGEX
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_DB_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        sync: false
