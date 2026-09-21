@@ -9,6 +9,8 @@ build/
 
 # Env / secrets
 .env
+.env.local
+web/.env.local
 data/.jwt-secret
 
 # Data (embedded PostgreSQL, uploads, old SQLite ledgers)

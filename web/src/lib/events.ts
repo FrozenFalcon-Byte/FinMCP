@@ -1,5 +1,5 @@
 /* The account's change feed over server-sent events (fetch-based so the bearer token travels in a header). */
-import { apiUrl, authHeaders } from "./api";
+import { apiUrl, authHeaders, isAbort, signalOffline, signalOnline } from "./api";
 
 export interface LedgerEvent {
   type: string;
@@ -20,6 +20,7 @@ export function subscribeEvents(onEvent: (ev: LedgerEvent) => void, onState: (li
       controller = new AbortController();
       try {
         const res = await fetch(apiUrl("/events"), { headers: { Accept: "text/event-stream", ...authHeaders() }, signal: controller.signal });
+        signalOnline();
         if (!res.ok || !res.body) {
           if (res.status === 401) window.dispatchEvent(new Event("finmcp:unauthorized"));
           throw new Error(`events ${res.status}`);
@@ -52,8 +53,8 @@ export function subscribeEvents(onEvent: (ev: LedgerEvent) => void, onState: (li
             }
           }
         }
-      } catch {
-        /* fall through to reconnect */
+      } catch (e) {
+        if (!stopped && !isAbort(e)) signalOffline(); // the stream dying is the first sign the backend went to sleep
       }
       onState(false);
       if (stopped) break;

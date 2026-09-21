@@ -8,6 +8,7 @@ import {
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Icon, useCountUp } from "../components/ui";
+import { mcpEndpoint } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { NOTES, snippet } from "./Connect";
 import "./landing.css";
@@ -101,6 +102,7 @@ export function Nav({ signedIn }: { signedIn: boolean }) {
         <nav className="links">
           <a href={to("#story")}>How it works</a>
           <a href={to("#security")}>Security</a>
+          <Link to="/docs" className="docs-link">MCP docs</Link>
         </nav>
         <div className="acts">
           {signedIn ? <Link className="l-btn" to="/app">Open app</Link> : (<>
@@ -390,7 +392,8 @@ const CLIENTS: { id: ClientId; n: string; d: string }[] = [
   { id: "cursor", n: "Cursor", d: "A global MCP server in mcp.json" },
   { id: "stdio", n: "Your scripts", d: "Streamable HTTP or stdio, same tools" },
 ];
-const HOST = "https://your-host/mcp";
+/** The endpoint this deployment actually serves, so the snippets on the page are the real thing. */
+const HOST = mcpEndpoint();
 
 function Stat({ to, suffix, label }: { to: number; suffix?: string; label: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -437,7 +440,7 @@ function Clients({ signedIn }: { signedIn: boolean }) {
         </motion.div>
       </AnimatePresence>
       <div className="stats">
-        <Stat to={24} label="MCP tools" />
+        <Stat to={27} label="MCP tools" />
         <Stat to={13} label="live resources" />
         <Stat to={0} label="API keys on the server" />
         <Stat to={100} suffix="%" label="rows behind row-level security" />
@@ -498,9 +501,9 @@ function BigCta({ signedIn }: { signedIn: boolean }) {
 /* ------------------------------------------------------------------ footer */
 
 const COLS: { h: string; l: [string, string][] }[] = [
-  { h: "Product", l: [["How it works", "#story"], ["Security", "#security"], ["Sign in", "/login"], ["Create account", "/register"]] },
+  { h: "Product", l: [["How it works", "/#story"], ["Security", "/#security"], ["MCP docs", "/docs"], ["Create account", "/register"]] },
   { h: "MCP", l: [["Live inspector", "/app/mcp"], ["Tools & resources", "#mcp"], ["Sampling", "#mcp"], ["Elicitation", "#mcp"]] },
-  { h: "Connect", l: [["Claude Desktop", "/app/connect"], ["Claude Code", "/app/connect"], ["Cursor", "/app/connect"], ["Any MCP client", "/app/connect"]] },
+  { h: "Connect", l: [["MCP docs", "/docs"], ["Claude Desktop", "/docs#clients"], ["Claude Code", "/docs#clients"], ["Any MCP client", "/docs#clients"]] },
   { h: "Inside the app", l: [["MCP live", "/app/mcp"], ["Ask", "/app/ask"], ["Import", "/app/import"], ["Activity", "/app/activity"]] },
   { h: "Built with", l: [["Model Context Protocol", "https://modelcontextprotocol.io"], ["Supabase", "https://supabase.com"], ["Claude", "https://www.anthropic.com/claude"], ["PostgreSQL", "https://www.postgresql.org"]] },
 ];

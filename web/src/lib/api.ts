@@ -41,8 +41,25 @@ function qs(params?: Params): string {
   return s ? `?${s}` : "";
 }
 
+/** The MCP endpoint this deployment exposes, for the config snippets shown in the docs and under Connect. */
+export const mcpEndpoint = (): string => `${API_BASE || window.location.origin}/mcp`;
+
+/* Reachability. The backend is free-tier hosted and sleeps when idle, so a request can hang for the best part of a
+   minute while the container wakes. Every fetch reports what it saw, and `WakeProvider` turns that into the notice. */
+export const signalOnline = () => window.dispatchEvent(new Event("finmcp:online"));
+export const signalOffline = () => window.dispatchEvent(new Event("finmcp:offline"));
+export const isAbort = (e: unknown): boolean => e instanceof DOMException && e.name === "AbortError";
+
+/** Reports reachability, then hands the response on unchanged. A 5xx means the host answered but the app did not. */
+export function watched(promise: Promise<Response>): Promise<Response> {
+  return promise.then(
+    (r) => { (r.status >= 500 ? signalOffline : signalOnline)(); return r; },
+    (e) => { if (!isAbort(e)) signalOffline(); throw e; },
+  );
+}
+
 /** Every request goes through here, so the page curtain knows when a screen has finished loading. */
-const tracked = (url: string, init?: RequestInit) => track(fetch(url, init));
+const tracked = (url: string, init?: RequestInit) => track(watched(fetch(url, init)));
 
 async function handle<T>(res: Response): Promise<T> {
   if (res.ok) return (await res.json()) as T;
@@ -82,12 +99,12 @@ export const api = {
 };
 
 export async function streamChat(message: string, conversationId: string | null, onEvent: (ev: ChatEvent) => void, signal?: AbortSignal): Promise<void> {
-  const res = await fetch(apiUrl("/chat"), {
+  const res = await watched(fetch(apiUrl("/chat"), {
     method: "POST",
     headers: json(),
     body: JSON.stringify({ message, conversation_id: conversationId ?? undefined }),
     signal,
-  });
+  }));
   if (!res.ok || !res.body) {
     if (res.status === 401) window.dispatchEvent(new Event("finmcp:unauthorized"));
     let detail = res.statusText;

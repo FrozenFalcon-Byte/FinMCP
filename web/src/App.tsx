@@ -6,6 +6,7 @@ import { QuickAdd } from "./components/QuickAdd";
 import { CurtainProvider } from "./components/Curtain";
 import { SignOutButton } from "./components/SignOut";
 import { ToastProvider } from "./components/Toast";
+import { WakeProvider } from "./components/Wake";
 import { Avatar, Chip, Icon, Sheet, type IconName } from "./components/ui";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { LedgerProvider } from "./lib/ledger";
@@ -15,6 +16,7 @@ import Activity from "./screens/Activity";
 import AuthScreen, { AuthLayout } from "./screens/Auth";
 import Budgets from "./screens/Budgets";
 import Chat from "./screens/Chat";
+import Docs from "./screens/Docs";
 import Connect from "./screens/Connect";
 import Emis from "./screens/Emis";
 import Goals from "./screens/Goals";
@@ -178,12 +180,14 @@ export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
+        <WakeProvider>
         <MotionConfig reducedMotion="user">
         <CurtainProvider>
         <AnimatePresence mode="wait" initial={false} onExitComplete={toTop}>
           <motion.div key={surface(location.pathname)} data-surface={surface(location.pathname)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease: EASE }}>
             <Routes location={location}>
               <Route path="/" element={<Landing />} />
+              <Route path="/docs" element={<Docs />} />
               <Route path="/mcp" element={<Navigate to="/app/mcp" replace />} />
               <Route element={<AuthLayout />}>
                 <Route path="/login" element={<AuthScreen mode="login" />} />
@@ -198,6 +202,7 @@ export default function App() {
         </AnimatePresence>
         </CurtainProvider>
         </MotionConfig>
+        </WakeProvider>
       </ToastProvider>
     </AuthProvider>
   );

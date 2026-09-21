@@ -2,5 +2,6 @@
     full-screen loader; moving inside one animates only the part that changes. */
 export function surface(path: string): string {
   if (path.startsWith("/app")) return "app";
-  return path === "/" ? "home" : "auth";
+  if (path === "/") return "home";
+  return path.startsWith("/docs") ? "docs" : "auth";
 }

@@ -789,3 +789,33 @@ button { cursor: pointer; }
 .island .orb { flex: none; width: 10px; height: 10px; margin: 0 3px; border-radius: 50%; background: #7b73ff; box-shadow: 0 0 0 0 rgba(123, 115, 255, .6); animation: orb 1.4s ease-in-out infinite; }
 @keyframes orb { 0% { box-shadow: 0 0 0 0 rgba(123, 115, 255, .55); transform: scale(.9); } 60% { box-shadow: 0 0 0 8px rgba(123, 115, 255, 0); transform: scale(1); } 100% { box-shadow: 0 0 0 0 rgba(123, 115, 255, 0); transform: scale(.9); } }
 .island button { flex: none; height: 30px; padding: 0 12px; border-radius: 999px; border: 0; background: rgba(255, 255, 255, .14); color: #fff; font-weight: 700; font-size: 12.5px; }
+
+/* ------------------------------------------------------------ cold-start notice
+   Bottom-left on a desktop, a full-width card above the tab bar on a phone. Deliberately not modal: the landing
+   page and anything already loaded keep working while the container boots. */
+.wake-wrap { position: fixed; left: 0; bottom: 0; z-index: 90; padding: 20px; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); pointer-events: none; }
+.wake { pointer-events: auto; width: min(400px, calc(100vw - 40px)); padding: 16px 16px 13px; border-radius: 20px; background: #14132a; color: #fff; box-shadow: 0 24px 60px -20px rgba(12, 10, 50, .7), 0 0 0 1px rgba(255, 255, 255, .08) inset; }
+.wake-head { display: flex; align-items: flex-start; gap: 12px; }
+.wake-head b { display: block; font: 700 15px/1.3 "Figtree", system-ui, sans-serif; }
+.wake-head span { display: block; margin-top: 4px; font-size: 13px; line-height: 1.5; color: rgba(255, 255, 255, .64); }
+.wake-orb { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgba(77, 67, 254, .22); }
+.wake-orb .pulse { width: 9px; height: 9px; border-radius: 50%; background: #8f88ff; animation: wake-pulse 1.4s ease-in-out infinite; }
+.wake-orb .dead { width: 9px; height: 9px; border-radius: 50%; background: #ff7a59; }
+.wake.down .wake-orb { background: rgba(255, 122, 89, .2); }
+@keyframes wake-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.72); } }
+.wake-x { flex: none; margin: -4px -4px 0 0; width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: rgba(255, 255, 255, .45); cursor: pointer; transition: background .2s, color .2s; }
+.wake-x:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+.wake-x svg { width: 14px; height: 14px; }
+.wake-bar { margin: 14px 0 10px; height: 4px; border-radius: 999px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.wake-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #4d43fe, #8f88ff); }
+.wake-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: rgba(255, 255, 255, .45); }
+.wake.down .wake-foot { margin-top: 12px; }
+.wake-foot .num { font-variant-numeric: tabular-nums; color: rgba(255, 255, 255, .72); font-weight: 600; }
+.wake-retry { border: 0; border-radius: 999px; padding: 7px 14px; background: rgba(255, 255, 255, .14); color: #fff; font: 600 12px "Figtree", system-ui, sans-serif; cursor: pointer; transition: background .2s; }
+.wake-retry:hover { background: rgba(255, 255, 255, .24); }
+@media (max-width: 900px) {
+  .wake-wrap { right: 0; padding: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .wake-wrap.in-app { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  .wake { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .wake-orb .pulse { animation: none; } }
