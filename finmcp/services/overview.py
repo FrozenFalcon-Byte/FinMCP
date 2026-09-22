@@ -50,11 +50,18 @@ def get_overview(repo: Repository, today: date | None = None, *, currency: str =
     prev_spent = prev["totals"]["spent"]
     pace_pct = round((spent - prev_spent) / prev_spent * 100, 1) if prev_spent else None
 
-    # Safe to spend: what is left of the month's budget, spread over the remaining days.
+    # Safe to spend, spread over the days that are left. Budgets are the most deliberate answer, then the plan the
+    # person set up on their first run — what they earn, less what they said they want to keep — and only then an
+    # average of what they happened to do. A new account has no history, which is exactly when the plan matters.
     budget_total = budget["totals"]["budget"]
+    plan = repo.account_plan()
+    income, keep_pct = plan["monthly_income"], plan["keep_pct"] or 0
     if budget_total:
         left = budget["totals"]["remaining"]
         basis = "budget"
+    elif income:
+        left = _round(income * (1 - keep_pct / 100)) - spent
+        basis = "plan"
     else:
         baseline = three["totals"]["spent"] / 3 if three["totals"]["spent"] else 0.0
         left = baseline - spent
@@ -99,7 +106,8 @@ def get_overview(repo: Repository, today: date | None = None, *, currency: str =
         "previous_spent": prev_spent,
         "pace_pct": pace_pct,
         "safe_to_spend": {"per_day": per_day, "left": _round(left) if basis != "none" else None, "basis": basis,
-                          "budget_total": budget_total or None, "used_pct": budget["totals"]["used_pct"]},
+                          "budget_total": budget_total or None, "used_pct": budget["totals"]["used_pct"],
+                          "plan_total": _round(income * (1 - keep_pct / 100)) if basis == "plan" else None},
         "top_categories": top_categories,
         "movers": movers[:3],
         "insights": insights[:3],

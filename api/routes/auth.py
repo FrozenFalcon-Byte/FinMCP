@@ -17,7 +17,7 @@ from finmcp.db.accounts import MIN_PASSWORD, Principal, Profile
 from finmcp.server import seed_account
 
 from ..auth import LOCAL_TTL
-from ..deps import AppContext, Registry, get_ctx, get_registry, require_principal
+from ..deps import AppContext, Registry, call_tool, get_ctx, get_registry, require_principal
 
 log = logging.getLogger("finmcp.api.auth")
 router = APIRouter(tags=["auth"])
@@ -38,6 +38,34 @@ class LoginBody(BaseModel):
 class ProfilePatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=80)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
+    avatar: str | None = Field(default=None, max_length=400_000, description="Square image as a data URL; empty string removes it")
+    monthly_income: float | None = Field(default=None, ge=0)
+    pay_day: int | None = Field(default=None, ge=1, le=31)
+    keep_pct: int | None = Field(default=None, ge=0, le=90)
+    tour_seen: bool = False
+
+
+class BudgetLine(BaseModel):
+    category: str = Field(min_length=1, max_length=60)
+    monthly_limit: float | None = Field(default=None, ge=0)
+
+
+class GoalLine(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    target: float = Field(gt=0)
+    due: str | None = None
+    icon: str | None = Field(default=None, max_length=8)
+
+
+class Onboarding(ProfilePatch):
+    """What the setup collects. Name, currency and income are what the dashboard cannot do without; the rest is
+    whatever the person felt like telling us on the way in."""
+
+    name: str = Field(min_length=1, max_length=80)
+    currency: str = Field(min_length=3, max_length=3)
+    monthly_income: float = Field(ge=0)
+    budgets: list[BudgetLine] = Field(default_factory=list, max_length=24)
+    goal: GoalLine | None = None
 
 
 def _client_ip(request: Request) -> str:
@@ -161,14 +189,37 @@ async def me(principal: Principal = Depends(require_principal), reg: Registry = 
     return {"user": profile.public(), "via": principal.via}
 
 
-@router.patch("/auth/profile")
-async def update_profile(body: ProfilePatch, principal: Principal = Depends(require_principal), reg: Registry = Depends(get_registry)) -> dict[str, Any]:
+def _write_profile(reg: Registry, user_id: str, body: ProfilePatch, *, onboarded: bool = False) -> Profile:
     try:
-        profile = await anyio.to_thread.run_sync(lambda: reg.store.update_profile(principal.user_id, name=body.name, currency=body.currency))
+        return reg.store.update_profile(
+            user_id, name=body.name, currency=body.currency, avatar=body.avatar, monthly_income=body.monthly_income,
+            pay_day=body.pay_day, keep_pct=body.keep_pct, onboarded=onboarded, tour_seen=body.tour_seen)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    reg.forget(principal.user_id)  # currency and name feed the per-account servers
+
+
+@router.patch("/auth/profile")
+async def update_profile(body: ProfilePatch, principal: Principal = Depends(require_principal), reg: Registry = Depends(get_registry)) -> dict[str, Any]:
+    profile = await anyio.to_thread.run_sync(lambda: _write_profile(reg, principal.user_id, body))
+    reg.forget(principal.user_id)  # currency and income feed the per-account servers
     return {"user": profile.public()}
+
+
+@router.post("/auth/onboarding")
+async def finish_onboarding(body: Onboarding, ctx: AppContext = Depends(get_ctx), reg: Registry = Depends(get_registry)) -> dict[str, Any]:
+    """Finish first-run setup: the person's own details go on the profile, and everything they planned goes into the
+    ledger through the same MCP tools any other client would use, so the audit trail reads the same either way.
+
+    Only the last step flips `onboarded_at`, so a half-finished setup is resumed rather than skipped."""
+    # The chosen budgets replace the taxonomy's example limits outright: a number nobody chose has no business
+    # deciding what the dashboard says is safe to spend.
+    budgets = [b for b in body.budgets if b.monthly_limit]
+    await call_tool(ctx, "replace_budgets", {"budgets": [{"category": b.category, "monthly_limit": b.monthly_limit} for b in budgets]})
+    if body.goal is not None:
+        await call_tool(ctx, "upsert_goal", body.goal.model_dump(exclude_none=True))
+    profile = await anyio.to_thread.run_sync(lambda: _write_profile(reg, ctx.user_id, body, onboarded=True))
+    reg.forget(ctx.user_id)
+    return {"user": profile.public(), "budgets": len(budgets), "goal": body.goal.name if body.goal else None}
 
 
 @router.post("/auth/seed-demo")

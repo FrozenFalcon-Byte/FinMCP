@@ -489,6 +489,14 @@ class Repository:
         )
         return [r for r in rows if _same_merchant(key, merchant_key(str(r["merchant"])))]
 
+    def account_plan(self) -> dict[str, Any]:
+        """What the person said they take home and how much of it they mean to keep, from first-run setup.
+
+        Read through the tenant connection, so it is the caller's own row or nothing."""
+        row = self._one("SELECT monthly_income, keep_pct FROM profiles WHERE id = %s", (self.user_id,)) or {}
+        income = row.get("monthly_income")
+        return {"monthly_income": float(income) if income else None, "keep_pct": int(row["keep_pct"]) if row.get("keep_pct") is not None else None}
+
     # ---------------------------------------------------------------- merchant memory
 
     def recall_merchant(self, key: str) -> dict[str, Any] | None:

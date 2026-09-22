@@ -7,6 +7,7 @@ import { AddButton, AddProvider } from "./components/QuickAdd";
 import { SignOutButton } from "./components/SignOut";
 import { TopBar } from "./components/TopBar";
 import { ToastProvider } from "./components/Toast";
+import { TourProvider } from "./components/Tour";
 import { WakeProvider } from "./components/Wake";
 import { Avatar, Chip, Icon, Sheet, type IconName } from "./components/ui";
 import { AuthProvider, useAuth } from "./lib/auth";
@@ -21,10 +22,12 @@ import Docs from "./screens/Docs";
 import Connect from "./screens/Connect";
 import Emis from "./screens/Emis";
 import Goals from "./screens/Goals";
+import Help from "./screens/Help";
 import Home from "./screens/Home";
 import Import from "./screens/Import";
 import Landing from "./screens/Landing";
 import Mcp from "./screens/Mcp";
+import Onboarding from "./screens/Onboarding";
 import Profile from "./screens/Profile";
 import ResetPassword from "./screens/ResetPassword";
 import Settings from "./screens/Settings";
@@ -46,6 +49,7 @@ const NAV_2: { to: string; label: string; icon: IconName }[] = [
   { to: "/app/connect", label: "Connect", icon: "plug" },
   { to: "/app/activity", label: "Activity", icon: "activity" },
   { to: "/app/profile", label: "Profile", icon: "user" },
+  { to: "/app/help", label: "Help", icon: "shield" },
   { to: "/app/settings", label: "Settings", icon: "settings" },
 ];
 
@@ -80,7 +84,7 @@ function Sidebar() {
         {user ? (
           <div className="account-box">
             <Link to="/app/profile" className="account" title="Your profile">
-              <Avatar name={user.name} />
+              <Avatar name={user.name} src={user.avatar} />
               <div className="who"><div className="n">{user.name}</div><div className="e">{user.email}</div></div>
             </Link>
             <SignOutButton className="btn sm ghost block signout" />
@@ -130,6 +134,7 @@ function Shell() {
     <StatusProvider>
       <LedgerProvider>
         <AddProvider>
+        <TourProvider>
         <div className="shell">
           <Sidebar />
           <main className="main">
@@ -152,6 +157,7 @@ function Shell() {
                 <Route path="activity" element={<Activity />} />
                 <Route path="profile" element={<Profile />} />
                 <Route path="settings" element={<Settings />} />
+                <Route path="help" element={<Help />} />
                 <Route path="*" element={<Navigate to="/app" replace />} />
               </Routes>
                 </motion.div>
@@ -163,6 +169,7 @@ function Shell() {
           <AddButton className="fab" label="Add" />
           <TabBar />
         </div>
+        </TourProvider>
         </AddProvider>
       </LedgerProvider>
     </StatusProvider>
@@ -175,6 +182,13 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
   if (!ready) return <div className="splash" aria-busy="true"><span className="spinner" /></div>;
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search + location.hash)}`} replace />;
   return children;
+}
+
+/** A dashboard with nothing behind it teaches nobody anything, so a new account is asked about itself first. The
+    gate is `onboarded_at` on the server: a reload, a new tab or another device all land back in the setup. */
+function Gate() {
+  const { user } = useAuth();
+  return user && !user.onboarded_at ? <Onboarding /> : <Shell />;
 }
 
 export default function App() {
@@ -197,7 +211,7 @@ export default function App() {
                 <Route path="/forgot-password" element={<ResetPassword mode="forgot" />} />
                 <Route path="/reset-password" element={<ResetPassword mode="reset" />} />
               </Route>
-              <Route path="/app/*" element={<RequireAuth><Shell /></RequireAuth>} />
+              <Route path="/app/*" element={<RequireAuth><Gate /></RequireAuth>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </motion.div>

@@ -168,7 +168,7 @@ export interface Overview {
   transaction_count: number;
   previous_spent: number;
   pace_pct: number | null;
-  safe_to_spend: { per_day: number | null; left: number | null; basis: "budget" | "average" | "none"; budget_total: number | null; used_pct: number | null };
+  safe_to_spend: { per_day: number | null; left: number | null; basis: "budget" | "plan" | "average" | "none"; budget_total: number | null; used_pct: number | null; plan_total: number | null };
   top_categories: SummaryBreakdown[];
   movers: { category: string; spent: number; before: number; delta: number }[];
   insights: Insight[];

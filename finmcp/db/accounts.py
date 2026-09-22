@@ -68,9 +68,18 @@ class Profile:
     currency: str
     created_at: str
     last_seen_at: str | None = None
+    avatar: str | None = None
+    monthly_income: float | None = None
+    pay_day: int | None = None
+    keep_pct: int | None = None
+    onboarded_at: str | None = None
+    tour_seen_at: str | None = None
 
     def public(self) -> dict[str, Any]:
-        return {"id": self.id, "email": self.email, "name": self.name, "currency": self.currency, "created_at": self.created_at}
+        return {"id": self.id, "email": self.email, "name": self.name, "currency": self.currency, "created_at": self.created_at,
+                "avatar": self.avatar, "monthly_income": float(self.monthly_income) if self.monthly_income is not None else None,
+                "pay_day": self.pay_day, "keep_pct": self.keep_pct,
+                "onboarded_at": self.onboarded_at, "tour_seen_at": self.tour_seen_at}
 
 
 @dataclass(frozen=True)
@@ -101,24 +110,59 @@ class AccountStore:
                    ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email,
                      name = CASE WHEN profiles.name = '' THEN EXCLUDED.name ELSE profiles.name END,
                      last_seen_at = now()
-                   RETURNING id, email, name, currency, created_at, last_seen_at""",
+                   RETURNING id, email, name, currency, created_at, last_seen_at, avatar, monthly_income, pay_day, keep_pct, onboarded_at, tour_seen_at""",
                 (user_id, normalize_email(email), (name or "").strip()),
             ).fetchone()
         return Profile(**{k: str(v) if k == "id" else v for k, v in clean_row(row).items()})  # type: ignore[arg-type]
 
     def get_profile(self, user_id: str) -> Profile | None:
         with self.db.admin() as conn:
-            row = conn.execute("SELECT id, email, name, currency, created_at, last_seen_at FROM profiles WHERE id = %s", (user_id,)).fetchone()
+            row = conn.execute("SELECT id, email, name, currency, created_at, last_seen_at, avatar, monthly_income, pay_day, keep_pct, onboarded_at, tour_seen_at FROM profiles WHERE id = %s", (user_id,)).fetchone()
         return Profile(**{k: str(v) if k == "id" else v for k, v in clean_row(row).items()}) if row else None  # type: ignore[arg-type]
 
     def get_profile_by_email(self, email: str) -> Profile | None:
         with self.db.admin() as conn:
-            row = conn.execute("SELECT id, email, name, currency, created_at, last_seen_at FROM profiles WHERE email = %s", (normalize_email(email),)).fetchone()
+            row = conn.execute("SELECT id, email, name, currency, created_at, last_seen_at, avatar, monthly_income, pay_day, keep_pct, onboarded_at, tour_seen_at FROM profiles WHERE email = %s", (normalize_email(email),)).fetchone()
         return Profile(**{k: str(v) if k == "id" else v for k, v in clean_row(row).items()}) if row else None  # type: ignore[arg-type]
 
-    def update_profile(self, user_id: str, *, name: str | None = None, currency: str | None = None) -> Profile:
+    MAX_AVATAR = 400_000  # characters of data URL; the browser sends a 256px square, which is a fraction of this
+
+    def update_profile(self, user_id: str, *, name: str | None = None, currency: str | None = None,
+                       avatar: str | None = None, monthly_income: float | None = None, pay_day: int | None = None,
+                       keep_pct: int | None = None, onboarded: bool = False, tour_seen: bool = False) -> Profile:
+        """Change what the person told us about themselves. Every field is optional; only what is passed is written.
+
+        The avatar is a small square data URL kept in the row rather than on disk, because the container's disk does
+        not survive a deploy and a face vanishing after a restart is worse than a few kilobytes in the table."""
         sets: list[str] = []
         params: list[Any] = []
+        if avatar is not None:
+            avatar = avatar.strip()
+            if avatar and not avatar.startswith("data:image/"):
+                raise ValueError("A photo must be an image.")
+            if len(avatar) > self.MAX_AVATAR:
+                raise ValueError("That photo is too large — 400KB or less, please.")
+            sets.append("avatar = %s")
+            params.append(avatar or None)
+        if monthly_income is not None:
+            if not 0 <= float(monthly_income) <= 1e11:
+                raise ValueError("Monthly income looks wrong.")
+            sets.append("monthly_income = %s")
+            params.append(float(monthly_income))
+        if pay_day is not None:
+            if not 1 <= int(pay_day) <= 31:
+                raise ValueError("Pay day is a day of the month, 1 to 31.")
+            sets.append("pay_day = %s")
+            params.append(int(pay_day))
+        if keep_pct is not None:
+            if not 0 <= int(keep_pct) <= 90:
+                raise ValueError("Keep between 0 and 90 percent.")
+            sets.append("keep_pct = %s")
+            params.append(int(keep_pct))
+        if onboarded:
+            sets.append("onboarded_at = coalesce(onboarded_at, now())")
+        if tour_seen:
+            sets.append("tour_seen_at = now()")
         if name is not None:
             name = " ".join(name.split())
             if not 1 <= len(name) <= 80:

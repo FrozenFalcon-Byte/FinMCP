@@ -40,8 +40,12 @@ export function Chip({ tone, children, onClick, on, title }: { tone?: "good" | "
   return <span className={`chip ${tone ?? ""}`} title={title}>{children}</span>;
 }
 
-export function Avatar({ name, credit, neutral, lg }: { name: string; credit?: boolean; neutral?: boolean; lg?: boolean }) {
-  return <span className={`ava ${credit ? "credit" : ""} ${neutral ? "neutral" : ""} ${lg ? "lg" : ""}`} aria-hidden="true">{initials(name)}</span>;
+export function Avatar({ name, src, credit, neutral, lg }: { name: string; src?: string | null; credit?: boolean; neutral?: boolean; lg?: boolean }) {
+  return (
+    <span className={`ava ${credit ? "credit" : ""} ${neutral ? "neutral" : ""} ${lg ? "lg" : ""} ${src ? "photo" : ""}`} aria-hidden="true">
+      {src ? <img src={src} alt="" /> : initials(name)}
+    </span>
+  );
 }
 
 export function Empty({ children }: { children: ReactNode }) {

@@ -199,6 +199,8 @@ button { cursor: pointer; }
 .account .e { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ava { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-2); font-size: 12px; font-weight: 700; display: grid; place-items: center; flex: none; }
 .ava.lg { width: 44px; height: 44px; font-size: 14px; }
+.ava.photo { background: var(--surface-2); overflow: hidden; }
+.ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ava.credit { background: var(--good-soft); color: var(--good); }
 .ava.neutral { background: var(--surface-3); color: var(--ink-2); }
 
@@ -842,3 +844,76 @@ button { cursor: pointer; }
   .wake { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .wake-orb .pulse { animation: none; } }
+
+/* ------------------------------------------------------------------ the walkthrough
+   One moving element: the lit rectangle. Its own huge shadow is the scrim, so the cutout edge stays exact while it
+   springs between targets and nothing has to be kept in sync with it. */
+.tour { position: fixed; inset: 0; z-index: 120; }
+.tour-hole { position: fixed; border-radius: 16px; box-shadow: 0 0 0 9999px rgba(12, 12, 28, .62), 0 0 0 2px var(--accent) inset;
+  pointer-events: auto; cursor: pointer; }
+.tour-card { position: fixed; width: 320px; max-width: calc(100vw - 32px); background: var(--surface); border-radius: 18px;
+  padding: 18px; box-shadow: 0 24px 60px rgba(12, 12, 28, .35); border: 1px solid var(--line); }
+.tour-step { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.tour-card h3 { margin: 8px 0 0; font-size: 18px; letter-spacing: -.01em; }
+.tour-card p { margin: 7px 0 0; font-size: 14px; line-height: 1.55; color: var(--ink-3); }
+.tour-acts { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; }
+.tour-right { display: flex; align-items: center; gap: 8px; }
+.tour-skip { border: 0; background: none; padding: 8px 2px; font-size: 13px; font-weight: 600; color: var(--ink-4); cursor: pointer; }
+.tour-skip:hover { color: var(--ink-2); }
+.tour-back, .tour-next { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; cursor: pointer;
+  font: 700 14px inherit; transition: background .18s; }
+.tour-back { width: 34px; height: 34px; justify-content: center; background: var(--surface-2); color: var(--ink-2); }
+.tour-back svg { width: 15px; height: 15px; transform: rotate(180deg); }
+.tour-next { height: 34px; padding: 0 16px; background: var(--accent); color: #fff; }
+.tour-next:hover { background: var(--accent-2); }
+.tour-next svg { width: 15px; height: 15px; }
+
+/* ------------------------------------------------------------------ help */
+.help-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 22px; }
+.help-hero h1 { margin: 0; font-size: 30px; letter-spacing: -.02em; }
+.help-hero p { margin: 8px 0 0; color: var(--ink-3); max-width: 58ch; }
+.help-find { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 0 14px; height: 50px; margin-bottom: 22px; }
+.help-find svg { width: 17px; height: 17px; color: var(--ink-4); flex: none; }
+.help-find input { flex: 1; border: 0; background: none; outline: none; font-size: 15px; color: var(--ink); min-width: 0; }
+.help-find button { border: 0; background: none; cursor: pointer; color: var(--ink-4); display: grid; place-items: center; padding: 4px; }
+.help-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.help-card { display: flex; gap: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px;
+  text-decoration: none; color: inherit; height: 100%; transition: border-color .2s, transform .2s, box-shadow .2s; }
+.help-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 10px 24px rgba(12, 12, 28, .07); }
+.help-card .ic { width: 38px; height: 38px; border-radius: 12px; background: var(--accent-soft); color: var(--accent-2); display: grid; place-items: center; flex: none; }
+.help-card .ic svg { width: 18px; height: 18px; }
+.help-card .n { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px; }
+.help-card .n svg { width: 14px; height: 14px; color: var(--ink-4); transition: transform .2s; }
+.help-card:hover .n svg { transform: translateX(3px); color: var(--accent); }
+.help-card p { margin: 5px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-3); }
+.help-card .w { display: block; margin-top: 7px; font-size: 12.5px; color: var(--ink-4); font-style: italic; }
+.help-none { color: var(--ink-3); }
+.help-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.help-panel h2 { margin: 0; font-size: 17px; letter-spacing: -.01em; }
+.help-panel h2.mt { margin-top: 22px; }
+.help-panel .sub { margin: 7px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-3); }
+.help-panel .btn { margin-top: 14px; }
+.help-lines { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.help-lines li { display: flex; flex-direction: column; gap: 3px; }
+.help-lines code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: var(--surface-2);
+  padding: 6px 10px; border-radius: 9px; align-self: flex-start; }
+.help-lines span { font-size: 12.5px; color: var(--ink-4); }
+.help-keys { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.help-keys li { display: flex; align-items: center; gap: 12px; font-size: 13.5px; color: var(--ink-3); }
+.help-keys kbd { min-width: 38px; text-align: center; font: 700 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface-2);
+  border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 7px; padding: 4px 7px; color: var(--ink-2); }
+.help-panel.wide { margin-top: 12px; }
+.help-panel.wide a { color: var(--accent-2); font-weight: 600; }
+@media (max-width: 860px) { .help-two { grid-template-columns: 1fr; } }
+
+/* Profile photo: the avatar itself is the control, so there is no separate upload widget to explain. */
+.profile-pfp { position: relative; border: 0; background: none; padding: 0; cursor: pointer; border-radius: 50%; flex: none; }
+.profile-pfp .ava { width: 64px; height: 64px; font-size: 20px; }
+.profile-pfp .edit { position: absolute; right: -2px; bottom: -2px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent);
+  color: #fff; display: grid; place-items: center; box-shadow: 0 2px 8px rgba(12, 12, 28, .25); }
+.profile-pfp .edit svg { width: 12px; height: 12px; }
+.profile-pfp:hover .edit { background: var(--accent-2); }
+.profile-pfp:disabled { opacity: .7; cursor: default; }
+.linkish { border: 0; background: none; padding: 0; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--ink-4); cursor: pointer; }
+.linkish:hover { color: var(--bad, #c2321f); }

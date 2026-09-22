@@ -52,6 +52,7 @@ const GROUPS: { h: string; i: IconName; tools: [string, string][] }[] = [
   ] },
   { h: "Budgets", i: "budget", tools: [
     ["set_budget", "Set or clear a monthly cap for a category."],
+    ["replace_budgets", "Make a list of budgets the only ones there are; every other category is cleared."],
     ["get_budget_summary", "Caps against actuals, with what is left."],
     ["check_budget_alerts", "Which caps are close or already broken."],
   ] },
@@ -109,7 +110,7 @@ const PROMPTS: [string, string][] = [
 ];
 
 const PROTOCOL: { h: string; dir: string; p: string }[] = [
-  { h: "Tools", dir: "client → server", p: "28 of them. Every read and every write in the app is one of these calls — the screens you use are just another MCP client." },
+  { h: "Tools", dir: "client → server", p: "29 of them. Every read and every write in the app is one of these calls — the screens you use are just another MCP client." },
   { h: "Resources", dir: "client → server", p: "13 live views of your ledger, including a templated one for any month. Hosts can read them without calling a tool." },
   { h: "Prompts", dir: "client → server", p: "Four ready-made conversations, so a host can offer them as slash commands." },
   { h: "Elicitation", dir: "server → client", p: "When a category is genuinely ambiguous the server pauses the tool call and asks. In this app that surfaces as a dialog; in Claude Desktop, as a question." },

@@ -8,7 +8,17 @@ import { clearCache } from "./cache";
 import { api, setAuthToken } from "./api";
 import { cookieStorage, getCookie, removeCookie, setCookie } from "./cookies";
 
-export interface AuthUser { id: string; email: string; name: string; currency: string; created_at: string }
+export interface AuthUser {
+  id: string; email: string; name: string; currency: string; created_at: string;
+  /** A small square data URL, or null. Kept on the profile so it follows the account between devices. */
+  avatar: string | null;
+  monthly_income: number | null;
+  pay_day: number | null;
+  keep_pct: number | null;
+  /** Set once first-run setup is finished. Until then the app shows the setup instead of the dashboard. */
+  onboarded_at: string | null;
+  tour_seen_at: string | null;
+}
 export interface AuthConfig {
   mode: "local" | "supabase";
   supabase_url: string | null;

@@ -95,6 +95,13 @@ class Confirm(BaseModel):
     confirm: bool = Field(default=False, description="Yes, go ahead")
 
 
+class BudgetLine(BaseModel):
+    """One line of a budget list: a category and what it is allowed each month."""
+
+    category: str = Field(min_length=1, max_length=60)
+    monthly_limit: float = Field(ge=0)
+
+
 class TenantState:
     """One account as seen by one client: repository, categorizer, query service, importer."""
 
@@ -602,6 +609,30 @@ def create_server(settings: Settings | None = None, *, db: Database | None = Non
     def list_categories(ctx: Context) -> dict[str, Any]:
         """Category taxonomy with kinds and monthly budget limits."""
         return {"categories": [c.model_dump() for c in tenant(ctx).repo.list_categories()]}
+
+    @server.tool(annotations=WRITE)
+    @_tool_errors
+    def replace_budgets(
+        ctx: Context,
+        budgets: Annotated[list[BudgetLine], Field(description="The complete set of budgets to keep; every other category is cleared")],
+    ) -> dict[str, Any]:
+        """Make these the only budgets there are: set each one, and clear the limit on every other category.
+
+        The default taxonomy ships with example limits so a fresh ledger is not empty, but an example is not a plan
+        — left in place they quietly become the numbers the dashboard judges you against. This is what first-run
+        setup calls, so what you see afterwards is only ever what you actually said."""
+        st = tenant(ctx)
+        wanted = {resolve_category_name(b.category) or b.category: b.monthly_limit for b in budgets}
+        kept, cleared = [], []
+        for cat in st.repo.list_categories():
+            if cat.name in wanted:
+                st.repo.set_budget(cat.name, wanted[cat.name])
+                kept.append(cat.name)
+            elif cat.budget_limit is not None:
+                st.repo.set_budget(cat.name, None)
+                cleared.append(cat.name)
+        st.repo.audit("mcp:replace_budgets", "update", "category", None, {"kept": kept, "cleared": len(cleared)})
+        return {"kept": kept, "cleared": cleared}
 
     @server.tool(annotations=WRITE)
     @_tool_errors

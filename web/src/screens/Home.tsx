@@ -49,7 +49,7 @@ export default function Home() {
 
       {ov.error ? <ErrorBox>{ov.error}</ErrorBox> : null}
 
-      <section className="card hero-card">
+      <section className="card hero-card" data-tour="pulse">
         <div className="between" style={{ alignItems: "flex-start" }}>
           <div>
             <div className="label">Spent this month</div>
@@ -75,7 +75,9 @@ export default function Home() {
           <div className="mini accent">
             <div className="k">Safe to spend</div>
             <div className="v num">{sts?.per_day != null ? `${money(Math.max(0, sts.per_day), currency)} / day` : "—"}</div>
-            <div className="s">{sts?.basis === "budget" ? `${money(Math.max(0, sts.left ?? 0), currency)} left of ${compact(sts.budget_total ?? 0, currency)}` : sts?.basis === "average" ? "based on your 3-month average" : "set budgets to see this"}</div>
+            <div className="s">{sts?.basis === "budget" ? `${money(Math.max(0, sts.left ?? 0), currency)} left of ${compact(sts.budget_total ?? 0, currency)}`
+              : sts?.basis === "plan" ? `${money(Math.max(0, sts.left ?? 0), currency)} left of the ${compact(sts.plan_total ?? 0, currency)} you planned to spend`
+              : sts?.basis === "average" ? "based on your 3-month average" : "set budgets to see this"}</div>
           </div>
           <div className="mini">
             <div className="k">Coming up</div>
