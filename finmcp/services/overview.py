@@ -88,6 +88,12 @@ def get_overview(repo: Repository, today: date | None = None, *, currency: str =
         m = movers[0]
         insights.append({"kind": "mover", "tone": "warn" if m["delta"] > 0 else "good", "category": m["category"],
                          "text": f"{m['category']} is {'up' if m['delta'] > 0 else 'down'} {abs(m['delta']):,.0f} on last month."})
+    # Budgets outrank the plan, so a take-home that has been lowered under them changes nothing at all. Say so,
+    # rather than leaving the person to wonder why the number they typed had no effect.
+    if basis == "budget" and income and budget_total > income * (1 - keep_pct / 100):
+        insights.append({"kind": "plan", "tone": "warn",
+                         "text": f"Your budgets add up to {budget_total:,.0f} a month, more than the "
+                                 f"{_round(income * (1 - keep_pct / 100)):,.0f} your take-home leaves to spend."})
     if largest is not None and largest.category_kind != "transfer":
         insights.append({"kind": "largest", "tone": "neutral", "transaction_id": largest.id,
                          "text": f"Largest expense: {largest.merchant} ({largest.amount:,.0f}) on {largest.date}."})
@@ -107,7 +113,12 @@ def get_overview(repo: Repository, today: date | None = None, *, currency: str =
         "pace_pct": pace_pct,
         "safe_to_spend": {"per_day": per_day, "left": _round(left) if basis != "none" else None, "basis": basis,
                           "budget_total": budget_total or None, "used_pct": budget["totals"]["used_pct"],
-                          "plan_total": _round(income * (1 - keep_pct / 100)) if basis == "plan" else None},
+                          # The plan travels even when budgets are what the number is made of, so the page can say
+                          # which of the two it is reading — a take-home that has been changed and appears to do
+                          # nothing is the most confusing thing this card can do.
+                          "income": _round(income) if income else None,
+                          "keep_pct": keep_pct or None,
+                          "plan_total": _round(income * (1 - keep_pct / 100)) if income else None},
         "top_categories": top_categories,
         "movers": movers[:3],
         "insights": insights[:3],

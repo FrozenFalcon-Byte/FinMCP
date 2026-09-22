@@ -27,6 +27,20 @@ async def recurring(ctx: AppContext = Depends(get_ctx)) -> Any:
     return await call_tool(ctx, "list_recurring", {})
 
 
+class RecurringBody(BaseModel):
+    merchant: str = Field(min_length=1, max_length=120)
+    amount: float = Field(gt=0)
+    cadence: str = "monthly"
+    next_due: str | None = None
+    category: str | None = None
+    autopay: bool = False
+
+
+@router.post("/recurring", status_code=201)
+async def add_recurring(body: RecurringBody, ctx: AppContext = Depends(get_ctx)) -> Any:
+    return await call_tool(ctx, "add_recurring", body.model_dump(exclude_none=True))
+
+
 class AutopayBody(BaseModel):
     merchant: str = Field(min_length=1, max_length=120)
     active: bool = True

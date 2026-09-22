@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useCurtain } from "../components/Curtain";
 import { SignOutButton } from "../components/SignOut";
 import { useToast } from "../components/Toast";
@@ -10,6 +11,8 @@ import { money, num } from "../lib/format";
 import { addPasskey, listPasskeys, readError, removePasskey, supported, type PasskeyRow } from "../lib/passkey";
 import { squarePhoto } from "../lib/photo";
 import { useLedger } from "../lib/ledger";
+import type { BudgetSummary } from "../lib/types";
+import { useApi } from "../lib/useApi";
 import { useStatus } from "../lib/status";
 
 /** Passkeys on this account. Adding one enrols the device you are on; removing one is immediate, so the page
@@ -99,6 +102,9 @@ export default function Profile() {
   const [phrase, setPhrase] = useState("");
   if (!user) return null;
   const s = health?.status;
+  // Budgets outrank take-home in safe-to-spend, so the field has to be able to say when it is not the one in charge.
+  const budget = useApi(() => api.get<BudgetSummary>("/budget"), []);
+  const budgeted = budget.data?.totals.budget ?? 0;
   const supabase = config?.mode === "supabase";
   const since = user.created_at ? new Date(user.created_at).toLocaleDateString("en-IN", { month: "long", year: "numeric" }) : null;
   const asNumber = (t: string): number => { const n = parseFloat(t.replace(/[^\d.]/g, "")); return Number.isFinite(n) && n > 0 ? n : 0; };
@@ -195,7 +201,7 @@ export default function Profile() {
         <div className="card stat"><span className="k">Merchants learned</span><span className="v">{s ? num(s.merchant_memory) : "…"}</span></div>
       </div>
 
-      <div className="grid two">
+      <div className="grid two profile-split">
         <section className="card">
           <div className="card-head"><h2>Details</h2></div>
           <form className="stack" onSubmit={(e) => void save(e)}>
@@ -203,7 +209,9 @@ export default function Profile() {
             <div className="field"><label htmlFor="p-cur">Currency</label><input id="p-cur" className="input" value={currency} onChange={(e) => setCurrency(e.target.value)} maxLength={3} minLength={3} required /><span className="help">Three-letter code. Amounts are stored as entered; this changes how they are shown and what the assistant says.</span></div>
             <div className="field"><label htmlFor="p-income">Monthly take-home</label>
               <input id="p-income" className="input" inputMode="numeric" value={income} onChange={(e) => setIncome(e.target.value)} placeholder="85,000" />
-              <span className="help">What safe-to-spend is measured against until you set budgets, which take over.</span></div>
+              <span className="help">{budgeted
+                ? <>Your budgets come to {money(budgeted, currency)} a month, and <Link to="/app/budgets">those</Link> are what safe-to-spend uses. This is what the assistant knows you earn.</>
+                : <>What safe-to-spend is measured against until you set budgets, which take over.</>}</span></div>
             <div className="field"><label htmlFor="p-payday">Pay day</label>
               <input id="p-payday" className="input" inputMode="numeric" value={payDay} onChange={(e) => setPayDay(e.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="1" />
               <span className="help">The day of the month it lands. Optional.</span></div>
@@ -213,19 +221,22 @@ export default function Profile() {
             <button className="btn primary" type="submit" disabled={busy !== null || !dirty}>{busy === "save" ? <Spinner /> : "Save changes"}</button>
           </form>
         </section>
-        <section className="card">
-          <div className="card-head"><h2>Sign-in and security</h2></div>
-          <div className="list">
-            <div className="item"><Icon name="user" /><div className="grow"><div className="t">Email</div><div className="s">{user.email}</div></div></div>
-            <div className="item"><Icon name="key" /><div className="grow"><div className="t">Password</div><div className="s">We email you a link to choose a new one.</div></div>
-              <button className="btn sm" onClick={() => void sendReset()} disabled={busy !== null}>{busy === "reset" ? <Spinner /> : "Send reset link"}</button></div>
-            <div className="item"><Icon name="shield" /><div className="grow"><div className="t">This browser</div><div className="s">Signed in. Signing out removes the saved session and cached data here.</div></div>
-              <SignOutButton /></div>
-          </div>
-        </section>
+        {/* Sign-in is two cards, stacked: the column grows with them rather than one card stretching to match
+            the form beside it and leaving a hole under its last row. */}
+        <div className="stack">
+          <section className="card">
+            <div className="card-head"><h2>Sign-in and security</h2></div>
+            <div className="list">
+              <div className="item"><Icon name="user" /><div className="grow"><div className="t">Email</div><div className="s">{user.email}</div></div></div>
+              <div className="item"><Icon name="key" /><div className="grow"><div className="t">Password</div><div className="s">We email you a link to choose a new one.</div></div>
+                <button className="btn sm" onClick={() => void sendReset()} disabled={busy !== null}>{busy === "reset" ? <Spinner /> : "Send reset link"}</button></div>
+              <div className="item"><Icon name="shield" /><div className="grow"><div className="t">This browser</div><div className="s">Signed in. Signing out removes the saved session and cached data here.</div></div>
+                <SignOutButton /></div>
+            </div>
+          </section>
+          <Passkeys />
+        </div>
       </div>
-
-      <Passkeys />
 
       <section className="card danger-zone">
         <div className="card-head"><h2>Delete account</h2></div>

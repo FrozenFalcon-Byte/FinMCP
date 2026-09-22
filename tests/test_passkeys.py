@@ -75,16 +75,50 @@ def test_a_stale_challenge_is_gone():
     assert c.spend(handle) is None
 
 
-def test_the_relying_party_is_the_site(monkeypatch):
+def _fake(origin: str | None, public_url: str = "https://api.example.com"):
     from types import SimpleNamespace
 
-    reg = SimpleNamespace(settings=SimpleNamespace(public_url="https://fin-mcp.example.app"))
-    rp_id, origins = _rp(reg)
-    assert rp_id == "fin-mcp.example.app" and origins == ["https://fin-mcp.example.app"]
+    reg = SimpleNamespace(settings=SimpleNamespace(public_url=public_url))
+    request = SimpleNamespace(headers={"origin": origin} if origin else {})
+    return reg, request
 
-    local = SimpleNamespace(settings=SimpleNamespace(public_url="http://127.0.0.1:8000"))
-    rp_id, origins = _rp(local)
-    assert rp_id == "localhost" and "http://localhost:5173" in origins    # the dev server counts too
+
+def test_the_relying_party_is_the_page_not_the_api(monkeypatch):
+    """The frontend is deployed apart from the API, so a passkey has to be bound to the site the person is on."""
+    monkeypatch.setenv("FINMCP_CORS_ORIGINS", "https://fin-mcp.example.app")
+    reg, request = _fake("https://fin-mcp.example.app")
+    assert _rp(reg, request) == ("fin-mcp.example.app", ["https://fin-mcp.example.app"])
+
+
+def test_an_origin_we_do_not_serve_is_not_trusted(monkeypatch):
+    """The header is the browser's claim about the page. An unrecognised one is ignored, not believed."""
+    monkeypatch.setenv("FINMCP_CORS_ORIGINS", "https://fin-mcp.example.app")
+    reg, request = _fake("https://evil.example")
+    assert _rp(reg, request) == ("api.example.com", ["https://api.example.com"])
+
+
+def test_the_api_serving_the_app_itself_still_works(monkeypatch):
+    monkeypatch.delenv("FINMCP_CORS_ORIGINS", raising=False)
+    reg, request = _fake("https://api.example.com")
+    assert _rp(reg, request) == ("api.example.com", ["https://api.example.com"])
+
+
+def test_dev_runs_on_localhost(monkeypatch):
+    monkeypatch.delenv("FINMCP_CORS_ORIGINS", raising=False)
+    reg, request = _fake("http://localhost:5173", public_url="http://127.0.0.1:8000")
+    assert _rp(reg, request) == ("localhost", ["http://localhost:5173"])
+
+    # No browser in the call: an authenticator will not take an IP as an id, so the fallback names localhost.
+    reg, request = _fake(None, public_url="http://127.0.0.1:8000")
+    assert _rp(reg, request) == ("localhost", ["http://localhost:8000"])
+
+
+def test_the_page_the_browser_names_is_never_rewritten(monkeypatch):
+    """A page served from 127.0.0.1 gets 127.0.0.1. It will not work — an authenticator refuses an IP — but the
+    refusal belongs to the browser, where it is legible, rather than to a quietly mismatched id from here."""
+    monkeypatch.delenv("FINMCP_CORS_ORIGINS", raising=False)
+    reg, request = _fake("http://127.0.0.1:8000", public_url="http://127.0.0.1:8000")
+    assert _rp(reg, request) == ("127.0.0.1", ["http://127.0.0.1:8000"])
 
 
 # ------------------------------------------------------------------ the session it mints

@@ -111,3 +111,54 @@ def test_the_tools_are_registered(server, tool):
 
     import anyio
     anyio.run(run)
+
+
+# ------------------------------------------------------------------ bills written down by hand
+
+
+def test_a_declared_bill_appears_without_any_history(repo: Repository):
+    """Detection needs three payments. A subscription taken out yesterday has none, and still has to be listable."""
+    repo.upsert_autopay(merchant="Hotstar", amount=299, cadence="monthly", cadence_days=30,
+                        category=None, next_due="2026-10-05", active=False)
+    found = next(i for i in list_recurring(repo, TODAY)["items"] if i["merchant"] == "Hotstar")
+    assert found["declared"] is True and found["occurrences"] == 0 and found["paid_total"] == 0
+    assert found["next_due"] == "2026-10-05" and found["autopay"]["active"] is False
+    assert found["monthly_cost"] == pytest.approx(303.3, abs=0.5)
+
+
+def test_a_declared_bill_counts_its_own_payments(repo: Repository):
+    """Declared says where the rhythm came from, not that the payments are imaginary."""
+    repo.insert_transaction(date="2026-09-05", amount=299, merchant="Hotstar", direction="debit")
+    repo.upsert_autopay(merchant="Hotstar", amount=299, cadence="monthly", cadence_days=30,
+                        category=None, next_due="2026-10-05")
+    found = next(i for i in list_recurring(repo, TODAY)["items"] if i["merchant"] == "Hotstar")
+    assert found["occurrences"] == 1 and found["paid_total"] == 299 and found["last_date"] == "2026-09-05"
+    assert found["paid_this_year"] == 299
+
+
+def test_a_declared_bill_gives_way_once_the_rhythm_is_real(repo: Repository):
+    """Once the detector can see it, the detected reading wins: one row, not two."""
+    bill(repo, "Hotstar", (5, 6, 7, 8, 9), amount=299)
+    repo.upsert_autopay(merchant="Hotstar", amount=299, cadence="monthly", cadence_days=30,
+                        category=None, next_due="2026-10-12")
+    rows = [i for i in list_recurring(repo, TODAY)["items"] if i["merchant"] == "Hotstar"]
+    assert len(rows) == 1 and rows[0]["declared"] is False and rows[0]["occurrences"] == 5
+
+
+def test_a_declared_bill_can_be_dropped(repo: Repository):
+    repo.upsert_autopay(merchant="Hotstar", amount=299, cadence="monthly", cadence_days=30,
+                        category=None, next_due="2026-10-05")
+    assert repo.delete_autopay("Hotstar") is True
+    assert not [i for i in list_recurring(repo, TODAY)["items"] if i["merchant"] == "Hotstar"]
+
+
+def test_a_declared_bill_can_be_switched_off_and_on(repo: Repository):
+    """The switch on the page works the same for a bill you wrote down as for one that was detected."""
+    repo.upsert_autopay(merchant="Hotstar", amount=299, cadence="monthly", cadence_days=30,
+                        category=None, next_due="2026-10-05")
+    off = repo.set_autopay_active("Hotstar", False)
+    assert off["active"] is False
+    item = next(i for i in list_recurring(repo, TODAY)["items"] if i["merchant"] == "Hotstar")
+    assert item["declared"] is True and item["autopay"]["active"] is False
+    assert list_recurring(repo, TODAY)["autopay_count"] == 0
+    assert repo.set_autopay_active("Hotstar", True)["active"] is True

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { initials } from "../lib/format";
 
@@ -83,7 +83,13 @@ export function Ring({ pct, size = 84, stroke = 9, tone, children }: { pct: numb
 }
 
 /** Minimal sparkline with a soft area and a dot on the last point. */
-export function Sparkline({ values, height = 76, color = "var(--accent)", labels }: { values: number[]; height?: number; color?: string; labels?: string[] }) {
+/** A trend line you can read a value off.
+
+    The line is drawn in its own coordinate space and stretched to the card's width, so pointing at it is a matter
+    of turning the pointer's share of the width back into an index. Everything the hover draws — the rule, the dot,
+    the tooltip — is laid over the same box in percentages, which keeps it honest at any width. */
+export function Sparkline({ values, height = 76, color = "var(--accent)", labels, format, empty }:
+  { values: number[]; height?: number; color?: string; labels?: string[]; format?: (v: number) => string; empty?: string }) {
   const w = 600;
   const h = height;
   const pad = 6;
@@ -93,12 +99,39 @@ export function Sparkline({ values, height = 76, color = "var(--accent)", labels
   const path = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
   const area = `${path} L${pts[pts.length - 1]?.[0] ?? pad},${h - pad} L${pad},${h - pad} Z`;
   const last = pts[pts.length - 1];
+  const [hot, setHot] = useState<number | null>(null);
+
+  const read = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    if (!box.width || n < 2) return;
+    const x = Math.min(Math.max(e.clientX - box.left, 0), box.width);
+    // The line is inset by `pad` at both ends, so the first and last points sit inside the box, not on its edges.
+    const inset = (pad / w) * box.width;
+    const span = Math.max(1, box.width - inset * 2);
+    setHot(Math.min(n - 1, Math.max(0, Math.round(((x - inset) / span) * (n - 1)))));
+  };
+
+  const at = hot !== null ? pts[hot] : null;
+  const value = hot !== null ? values[hot] : 0;
   return (
-    <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-label={labels ? `${labels[0]} to ${labels[labels.length - 1]}` : "trend"}>
-      {n > 1 ? <path d={area} fill={color} opacity={0.08} /> : null}
-      {n > 1 ? <path d={path} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" /> : null}
-      {last ? <circle cx={last[0]} cy={last[1]} r={4} fill={color} /> : null}
-    </svg>
+    <div className="spark-wrap" onPointerMove={read} onPointerLeave={() => setHot(null)}
+      role="img" aria-label={labels ? `${labels[0]} to ${labels[labels.length - 1]}` : "trend"}>
+      <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
+        {n > 1 ? <path d={area} fill={color} opacity={0.08} /> : null}
+        {n > 1 ? <path d={path} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" /> : null}
+        {last && hot === null ? <circle cx={last[0]} cy={last[1]} r={4} fill={color} /> : null}
+        {at ? <line x1={at[0]} y1={0} x2={at[0]} y2={h} stroke="var(--line-2)" strokeWidth={1} vectorEffect="non-scaling-stroke" /> : null}
+      </svg>
+      {at ? (
+        <>
+          <span className="spark-dot" style={{ left: `${(at[0] / w) * 100}%`, top: `${(at[1] / h) * 100}%`, background: color }} />
+          <span className={`spark-tip ${hot! > n / 2 ? "left" : ""}`} style={{ left: `${(at[0] / w) * 100}%` }}>
+            <b>{value ? (format ? format(value) : value.toLocaleString()) : (empty ?? "nothing")}</b>
+            {labels?.[hot!] ? <i>{labels[hot!]}</i> : null}
+          </span>
+        </>
+      ) : null}
+    </div>
   );
 }
 

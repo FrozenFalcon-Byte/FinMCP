@@ -124,16 +124,68 @@ def detect_recurring(rows: list[dict[str, Any]], today: date | None = None, *, m
     return found
 
 
+CADENCE_DAYS: dict[str, int] = {name: days for name, days, *_ in CADENCES}
+
+
+def _declared(rule: dict[str, Any], history: list[dict[str, Any]], today: date) -> dict[str, Any]:
+    """An item for a bill the account wrote down itself.
+
+    Detection reads a rhythm out of history; this reads it off the instruction. The numbers underneath are still
+    counted from real payments to that merchant — there may be none yet, and a row that says "paid 0×" is the
+    honest answer for a bill that has only been declared."""
+    key = str(rule["merchant_key"])
+    paid = sorted((r for r in history if merchant_key(r["merchant"]) == key), key=lambda r: str(r["date"]))
+    dates = [date.fromisoformat(str(r["date"])) for r in paid]
+    amounts = [float(r["amount"]) for r in paid]
+    cadence, days = str(rule["cadence"]), int(rule["cadence_days"])
+    next_due = date.fromisoformat(str(rule["next_due"]))
+    days_until = (next_due - today).days
+    last = paid[-1] if paid else None
+    return {
+        "key": key,
+        "merchant": str(rule["merchant"]),
+        "category": rule.get("category") or (last.get("category") if last else None),
+        "category_kind": (last.get("category_kind") if last else None) or "expense",
+        "cadence": cadence,
+        "cadence_days": days,
+        "amount": round(float(rule["amount"]), 2),
+        "amount_varies": False,
+        "last_amount": round(amounts[-1], 2) if amounts else round(float(rule["amount"]), 2),
+        "last_date": dates[-1].isoformat() if dates else None,
+        "next_due": next_due.isoformat(),
+        "days_until": days_until,
+        "status": "overdue" if days_until < -2 else "due" if days_until <= 3 else "upcoming",
+        "occurrences": len(paid),
+        "first_date": dates[0].isoformat() if dates else None,
+        "paid_total": round(sum(amounts), 2),
+        "paid_12m": round(sum(a for a, d in zip(amounts, dates, strict=True) if (today - d).days <= 365), 2),
+        "paid_this_year": round(sum(a for a, d in zip(amounts, dates, strict=True) if d.year == today.year), 2),
+        "count_this_year": sum(1 for d in dates if d.year == today.year),
+        "regularity": 1.0,
+        "monthly_cost": round(float(rule["amount"]) * 30.4375 / days, 2),
+        "transaction_ids": [int(r["id"]) for r in paid[-3:]],
+        "declared": True,
+    }
+
+
 def list_recurring(repo: Repository, today: date | None = None, *, days: int = 400) -> dict[str, Any]:
-    items = detect_recurring(repo.debit_history(days), today)
+    today = today or date.today()
+    history = repo.debit_history(days)
+    items = detect_recurring(history, today)
     # Standing instructions are stitched on rather than detected: the list stays a reading of history, and autopay
-    # is what the account has said about it.
+    # is what the account has said about it. A rule with no rhythm behind it — a bill written down by hand, or one
+    # whose payments have not built a pattern yet — becomes an item of its own, marked as declared.
+    standing = repo.list_autopay()
     rules = {str(r["merchant_key"]): {
         "active": bool(r["active"]), "amount": float(r["amount"]), "next_due": str(r["next_due"]),
         "posted_count": int(r["posted_count"]), "last_posted_on": str(r["last_posted_on"]) if r["last_posted_on"] else None,
-    } for r in repo.list_autopay()}
+    } for r in standing}
+    seen = {str(i["key"]) for i in items}
+    items += [_declared(r, history, today) for r in standing if str(r["merchant_key"]) not in seen]
     for item in items:
         item["autopay"] = rules.get(str(item["key"]))
+        item.setdefault("declared", False)
+    items.sort(key=lambda r: (r["days_until"], -r["amount"]))
     expenses = [i for i in items if i["category_kind"] != "transfer"]
     on_autopay = [i for i in items if i.get("autopay") and i["autopay"]["active"]]
     return {
@@ -145,5 +197,5 @@ def list_recurring(repo: Repository, today: date | None = None, *, days: int = 4
         "monthly_expenses": round(sum(i["monthly_cost"] for i in expenses), 2),
         "upcoming": [i for i in items if -2 <= i["days_until"] <= 14],
         "items": items,
-        "checked_at": (today or date.today()).isoformat(),
+        "checked_at": today.isoformat(),
     }

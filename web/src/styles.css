@@ -19,6 +19,9 @@
   --accent-soft-2: #d7d3ff;
   --accent-ink: #ffffff;
   --gold: #e8b84a;
+  /* The landing page's yellow. Nothing else in the app wears it, which is the point: see .btn.topbar-add. */
+  --sun: #ffd84d;
+  --sun-2: #f5c92b;
   --good: #0e7c5b;
   --good-soft: #e4f4ec;
   --warn: #a3660f;
@@ -73,6 +76,7 @@ button { cursor: pointer; }
 .strong { font-weight: 700; }
 .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
 .row { display: flex; align-items: center; gap: 10px; }
+.row.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .stack { display: flex; flex-direction: column; gap: 16px; }
 .grow { flex: 1; min-width: 0; }
@@ -169,6 +173,8 @@ button { cursor: pointer; }
 .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid.wide-left { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+/* Columns that hold different amounts sit at their own height rather than one stretching to match the other. */
+.grid.profile-split { align-items: start; }
 .empty { padding: 26px; text-align: center; color: var(--ink-3); font-size: 14px; border: 1px dashed var(--line-2); border-radius: var(--r-lg); }
 .error-box { padding: 12px 14px; border-radius: var(--r-md); background: var(--bad-soft); color: var(--bad); font-size: 13px; }
 .skeleton { position: relative; overflow: hidden; background: var(--surface-3); border-radius: 10px; min-height: 16px; }
@@ -223,10 +229,16 @@ button { cursor: pointer; }
 /* Scrolled away from the top, the bar earns a hairline so the page does not appear to slide out of nothing. */
 .topbar.lifted { border-bottom-color: var(--line); background: rgba(244, 245, 247, 0.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 .topbar-in { width: 100%; max-width: var(--page); margin: 0 auto; display: flex; align-items: center; gap: 16px; }
-.topbar-add { flex: none; height: 44px; border-radius: 999px; white-space: nowrap; padding: 0 18px; }
+/* The only Add in the app, so it is allowed to be the loudest thing on the bar. It wears the landing page's
+   yellow on ink: the one colour nothing else in here uses, so it is found by colour before it is read. */
+.btn.topbar-add { flex: none; height: 44px; border-radius: 999px; white-space: nowrap; padding: 0 20px; font-weight: 700;
+  background: var(--sun); border-color: var(--sun); color: var(--ink); box-shadow: 0 10px 22px -10px rgba(214, 168, 0, .7); }
+.btn.topbar-add:hover:not(:disabled) { background: var(--sun-2); border-color: var(--sun-2); box-shadow: 0 12px 26px -10px rgba(214, 168, 0, .85); }
+.btn.topbar-add svg { width: 17px; height: 17px; stroke-width: 2.4; }
+.btn.topbar-add:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 
 /* The same add action, under the thumb. Phones only: on a desktop the top bar is already within reach. */
-.fab { display: none; position: fixed; right: 16px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 30; width: 56px; height: 56px; border: 0; border-radius: 50%; background: var(--ink); color: #fff; align-items: center; justify-content: center; box-shadow: 0 16px 34px -12px rgba(12, 18, 34, .6); cursor: pointer; }
+.fab { display: none; position: fixed; right: 16px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 30; width: 56px; height: 56px; border: 0; border-radius: 50%; background: var(--sun); color: var(--ink); align-items: center; justify-content: center; box-shadow: 0 16px 34px -12px rgba(214, 168, 0, .75); cursor: pointer; }
 .fab svg { width: 24px; height: 24px; }
 .fab .lbl { display: none; }
 
@@ -262,12 +274,25 @@ button { cursor: pointer; }
 .hero-card .big { font-size: 44px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; margin-top: 4px; }
 .hero-card .pace { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .hero-card .insight { margin-top: 14px; font-size: 14px; color: var(--ink-2); }
-.spark { display: block; width: 100%; height: 76px; margin-top: 18px; }
+/* The trend line, and the value you get by pointing at it. The overlay is positioned in percentages over the
+   same box the line is stretched into, so the dot stays on the line at every width. */
+.spark-wrap { position: relative; margin-top: 18px; touch-action: pan-y; }
+.spark { display: block; width: 100%; height: 76px; }
+.spark-dot { position: absolute; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--surface); transform: translate(-50%, -50%); pointer-events: none; }
+.spark-tip { position: absolute; bottom: calc(100% - 6px); transform: translateX(-50%); display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 10px; background: var(--ink); color: #fff; white-space: nowrap; pointer-events: none; z-index: 2; box-shadow: 0 10px 22px -10px rgba(12, 18, 34, .55); }
+.spark-tip b { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; }
+.spark-tip i { font-size: 11px; font-style: normal; opacity: .65; }
+/* Past the halfway mark the tooltip hangs off the right edge, so it flips to sit inside the card. */
+.spark-tip.left { transform: translateX(-100%) translateX(12px); }
 .mini-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
 .mini { padding: 14px 16px; border-radius: var(--r-lg); background: var(--surface-2); }
 .mini .k { font-size: 12px; color: var(--ink-3); font-weight: 600; }
 .mini .v { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin-top: 2px; }
 .mini .s { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+/* Where the tile's number comes from. Quiet by default, because it is an explanation, not a headline. */
+.mini .basis { font-size: 11px; color: var(--ink-3); margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); opacity: .85; }
+.mini .basis a { color: var(--accent-2); font-weight: 600; text-decoration: none; }
+.mini .basis a:hover { text-decoration: underline; }
 .mini.accent { background: var(--accent-soft); }
 .mini.accent .v { color: var(--accent-2); }
 
@@ -577,8 +602,9 @@ button { cursor: pointer; }
   .omni { height: 42px; max-width: none; padding-left: 13px; }
   .omni .kbd { display: none; }
   .omni-hint { left: auto; right: 0; }
-  .topbar-add { height: 42px; width: 42px; padding: 0; justify-content: center; }
-  .topbar-add .lbl { display: none; }
+  /* One Add on screen at a time: on a phone it is the one under your thumb, so the bar gives the search box
+     its whole width back instead of showing the same button twice. */
+  .btn.topbar-add { display: none; }
   .fab { display: flex; }
   .content { padding: 8px 16px calc(96px + env(safe-area-inset-bottom)); }
   .page-frame { max-width: none; }
@@ -1036,6 +1062,10 @@ button { cursor: pointer; }
 .sub-row .t { font-weight: 700; font-size: 14.5px; display: flex; align-items: center; gap: 8px; }
 .sub-row .t .tag { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-2); font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .sub-row .t .tag svg { width: 11px; height: 11px; }
+/* A bill that was written down rather than detected. It is a provenance note, not a status, so it stays grey. */
+.sub-row .t .tag.quiet { background: var(--surface-3); color: var(--ink-3); }
+.btn.danger-text { color: var(--bad); }
+.btn.danger-text:hover:not(:disabled) { background: var(--bad-soft); }
 .sub-row .s { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
 .sub-row .right { text-align: right; flex: none; }
 .sub-row .right .amt { font-weight: 700; font-variant-numeric: tabular-nums; }

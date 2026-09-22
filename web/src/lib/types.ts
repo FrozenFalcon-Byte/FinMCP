@@ -97,6 +97,8 @@ export interface Alert {
 export interface Alerts { month: string; label: string; alert_count: number; alerts: Alert[]; checked_at: string }
 
 export interface Recurring {
+  /** Written down by hand rather than read out of a payment rhythm. */
+  declared?: boolean;
   key: string;
   merchant: string;
   category: string | null;
@@ -106,7 +108,8 @@ export interface Recurring {
   amount: number;
   amount_varies: boolean;
   last_amount: number;
-  last_date: string;
+  /** Null on a declared bill with no payment behind it yet. */
+  last_date: string | null;
   next_due: string;
   days_until: number;
   status: "overdue" | "due" | "upcoming";
@@ -115,7 +118,7 @@ export interface Recurring {
   monthly_cost: number;
   transaction_ids: number[];
   /** What this bill has actually cost, counted from the payments themselves. */
-  first_date: string;
+  first_date: string | null;
   paid_total: number;
   paid_12m: number;
   paid_this_year: number;
@@ -182,7 +185,7 @@ export interface Overview {
   transaction_count: number;
   previous_spent: number;
   pace_pct: number | null;
-  safe_to_spend: { per_day: number | null; left: number | null; basis: "budget" | "plan" | "average" | "none"; budget_total: number | null; used_pct: number | null; plan_total: number | null };
+  safe_to_spend: { per_day: number | null; left: number | null; basis: "budget" | "plan" | "average" | "none"; budget_total: number | null; used_pct: number | null; plan_total: number | null; income: number | null; keep_pct: number | null };
   top_categories: SummaryBreakdown[];
   movers: { category: string; spent: number; before: number; delta: number }[];
   insights: Insight[];

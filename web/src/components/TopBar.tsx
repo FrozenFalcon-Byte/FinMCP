@@ -2,8 +2,9 @@
 
    It used to be one box that looked like search but added transactions, which read as a trap. Now the two are
    separate: the box searches — typing takes you to Transactions and narrows them as you go, so the results are
-   the page rather than a dropdown — and adding is the button beside it, the same one that sits on the
-   Transactions header and under your thumb on a phone. */
+   the page rather than a dropdown — and adding is the button beside it. There is exactly one of those: this bar
+   is on every screen, so a second copy on a page header only made the two compete. On a phone the same action
+   moves under your thumb instead. */
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -118,7 +119,7 @@ export function TopBar({ children }: { children?: ReactNode }) {
     <div className={`topbar ${lifted ? "lifted" : ""}`}>
       <div className="topbar-in">
         <OmniSearch />
-        <AddButton className="btn sm primary topbar-add" label="Add" />
+        <AddButton className="btn sm topbar-add" label="Add" />
         {children}
       </div>
     </div>

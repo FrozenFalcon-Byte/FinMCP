@@ -42,6 +42,7 @@ from finmcp.db.accounts import Principal, Profile
 
 from ..auth import LOCAL_TTL, RateLimiter
 from ..deps import Registry, get_registry, require_principal
+from ..origins import allowed_origin
 
 log = logging.getLogger("finmcp.api.passkeys")
 router = APIRouter(tags=["auth"])
@@ -77,16 +78,28 @@ class _Challenges:
 _challenges = _Challenges()
 
 
-def _rp(reg: Registry) -> tuple[str, list[str]]:
-    """(relying party id, acceptable origins). The id is the site's registrable domain: a passkey made on
-    fin-mcp.vercel.app has to be presented there and nowhere else, which is what makes it unphishable."""
+def _rp(reg: Registry, request: Request) -> tuple[str, list[str]]:
+    """(relying party id, acceptable origins) for the page making this call.
+
+    The id has to be the domain of the page the person is on, not of this API: the frontend is deployed apart from
+    the backend, and a passkey made for fin-mcp.vercel.app can only ever be presented there — which is exactly what
+    makes it unphishable. So the browser's own Origin header decides, but only after `allowed_origin` recognises it,
+    since the header is a claim about the page and nothing more. With no usable origin we fall back to this API's
+    public URL, which is the right answer when the API serves the built app itself.
+    """
+    origin = allowed_origin(request.headers.get("origin"), also=reg.settings.public_url)
+    if origin is not None:
+        # Whatever the browser says the page is, unchanged: an id that does not match the page is refused by the
+        # authenticator before it ever reaches us, so guessing a nicer one would only hide the real answer.
+        return urlparse(origin).hostname or "localhost", [origin]
     url = urlparse(reg.settings.public_url)
+    origin = f"{url.scheme}://{url.netloc}"
     host = url.hostname or "localhost"
-    origins = [f"{url.scheme}://{url.netloc}"]
-    if host in {"localhost", "127.0.0.1"}:
-        host = "localhost"
-        origins = ["http://localhost:5173", "http://localhost:8000", "http://127.0.0.1:5173", "http://127.0.0.1:8000", *origins]
-    return host, origins
+    if host == "127.0.0.1":
+        # Dev only, and only when no browser told us otherwise: an authenticator will not take an IP as an id,
+        # and localhost is the name browsers allow over plain http.
+        host, origin = "localhost", origin.replace("127.0.0.1", "localhost")
+    return host, [origin]
 
 
 def _session(reg: Registry, profile: Profile) -> dict[str, Any]:
@@ -109,8 +122,8 @@ async def list_passkeys(principal: Principal = Depends(require_principal), reg: 
 
 
 @router.post("/auth/passkeys/register/options")
-async def register_options(principal: Principal = Depends(require_principal), reg: Registry = Depends(get_registry)) -> dict[str, Any]:
-    rp_id, _ = _rp(reg)
+async def register_options(request: Request, principal: Principal = Depends(require_principal), reg: Registry = Depends(get_registry)) -> dict[str, Any]:
+    rp_id, _ = _rp(reg, request)
     known = await anyio.to_thread.run_sync(lambda: reg.store.passkey_ids(principal.user_id))
     options = generate_registration_options(
         rp_id=rp_id, rp_name=RP_NAME,
@@ -125,11 +138,11 @@ async def register_options(principal: Principal = Depends(require_principal), re
 
 
 @router.post("/auth/passkeys/register/verify", status_code=201)
-async def register_verify(body: Answer, principal: Principal = Depends(require_principal), reg: Registry = Depends(get_registry)) -> dict[str, Any]:
+async def register_verify(body: Answer, request: Request, principal: Principal = Depends(require_principal), reg: Registry = Depends(get_registry)) -> dict[str, Any]:
     opened = _challenges.spend(body.handle)
     if opened is None or opened[1] != principal.user_id:
         raise HTTPException(status_code=400, detail="That took too long. Try adding the passkey again.")
-    rp_id, origins = _rp(reg)
+    rp_id, origins = _rp(reg, request)
     try:
         ok = verify_registration_response(credential=body.credential, expected_challenge=opened[0],
                                           expected_rp_id=rp_id, expected_origin=origins)
@@ -156,10 +169,10 @@ async def delete_passkey(passkey_id: int, principal: Principal = Depends(require
 
 
 @router.post("/auth/passkeys/login/options")
-async def login_options(reg: Registry = Depends(get_registry)) -> dict[str, Any]:
+async def login_options(request: Request, reg: Registry = Depends(get_registry)) -> dict[str, Any]:
     """No email, no allow-list: the browser offers whichever passkey it holds for this site, and the credential
     it returns says who it belongs to."""
-    rp_id, _ = _rp(reg)
+    rp_id, _ = _rp(reg, request)
     options = generate_authentication_options(rp_id=rp_id, user_verification=UserVerificationRequirement.PREFERRED)
     return {"handle": _challenges.issue(options.challenge), "options": json.loads(options_to_json(options))}
 
@@ -179,7 +192,7 @@ async def login_verify(body: Answer, request: Request, reg: Registry = Depends(g
     if stored is None:
         raise HTTPException(status_code=401, detail="That passkey is not registered here.")
 
-    rp_id, origins = _rp(reg)
+    rp_id, origins = _rp(reg, request)
     try:
         ok = verify_authentication_response(
             credential=body.credential, expected_challenge=opened[0], expected_rp_id=rp_id, expected_origin=origins,

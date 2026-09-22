@@ -1,7 +1,6 @@
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AddButton } from "../components/QuickAdd";
 import { useToast } from "../components/Toast";
 import { Avatar, Chip, Empty, ErrorBox, Icon, PageHead, Sheet, Skeleton, Spinner } from "../components/ui";
 import { isFresh, peek, put } from "../lib/cache";
@@ -128,7 +127,8 @@ export default function Transactions() {
   return (
     <>
       <PageHead title="Transactions" sub={loading && !rows.length ? "Loading…" : `${total.toLocaleString("en-IN")} in ${PERIODS.find((p) => p.value === period)?.label.toLowerCase() ?? period}`}>
-        <AddButton className="btn sm primary" label="Add" />
+        {/* No Add here: the one in the bar above is on every screen, and two of them on the same line made the
+            page's own actions compete with it. */}
         <button className="btn sm" onClick={() => void api.download(`/export.csv${period !== "all time" ? `?period=${encodeURIComponent(period)}` : ""}`, "finmcp-transactions.csv")}><Icon name="download" />CSV</button>
         {review ? <button className="btn sm primary" onClick={() => void categorizeRest()} disabled={busy}><Icon name="wand" />Categorise the rest</button> : null}
       </PageHead>

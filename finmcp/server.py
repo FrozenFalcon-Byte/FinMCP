@@ -49,7 +49,7 @@ from .services.emis import emi_report, emi_status
 from .services.entry import parse_entry as read_entry_line
 from .services.overview import get_overview
 from .services.periods import resolve_period
-from .services.recurring import list_recurring
+from .services.recurring import CADENCE_DAYS, list_recurring, next_due_after
 from .services.summary import check_budget_alerts, get_budget_summary, get_summary
 from .services.text_to_sql import QueryService
 from .subscriptions import RoutedBus
@@ -766,6 +766,33 @@ def create_server(settings: Settings | None = None, *, db: Database | None = Non
     def list_recurring_tool(ctx: Context) -> dict[str, Any]:
         """Subscriptions, bills, rent and SIPs detected from payment rhythm: cadence, typical amount, next due date, monthly cost."""
         return list_recurring(tenant(ctx).repo)
+
+    @server.tool(annotations=WRITE)
+    @_tool_errors
+    def add_recurring(
+        ctx: Context,
+        merchant: Annotated[str, Field(description="Who it is paid to", min_length=1, max_length=120)],
+        amount: Annotated[float, Field(description="What it costs each cycle", gt=0)],
+        cadence: Annotated[str, Field(description="weekly, fortnightly, monthly, quarterly or yearly")] = "monthly",
+        next_due: Annotated[str | None, Field(description="ISO date of the next payment. Default: one cycle from today.")] = None,
+        category: Annotated[str | None, Field(description="What to file it under")] = None,
+        autopay: Annotated[bool, Field(description="Also file each cycle automatically on its due date")] = False,
+    ) -> dict[str, Any]:
+        """Write down a bill the detector has not found yet.
+
+        Detection needs three regular payments; this is for the subscription you just took out, or the one whose
+        payments are too irregular to read. The bill then appears in list_recurring like any other, marked as
+        declared, with its own payments counted underneath it once they arrive."""
+        st = tenant(ctx)
+        name = merchant.strip()
+        cadence = cadence.strip().lower()
+        if cadence not in CADENCE_DAYS:
+            raise ToolError(f"Cadence has to be one of {', '.join(CADENCE_DAYS)}.")
+        days = CADENCE_DAYS[cadence]
+        when = _parse_iso(next_due, "next_due") if next_due else next_due_after(_date.today(), cadence, days).isoformat()
+        row = st.repo.upsert_autopay(merchant=name, amount=float(amount), cadence=cadence, cadence_days=days,
+                                     category=category, next_due=when, active=bool(autopay))
+        return {"recurring": row, "autopay": bool(autopay)}
 
     @server.tool(annotations=WRITE)
     @_tool_errors

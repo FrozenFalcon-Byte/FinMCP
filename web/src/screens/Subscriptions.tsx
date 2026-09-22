@@ -6,12 +6,16 @@
    filing it twice.
 
    The second half of the question is how much these things have actually taken, so every row carries its own
-   record: how many times it has been paid, what that came to this year, and what autopay itself has filed. */
+   record: how many times it has been paid, what that came to this year, and what autopay itself has filed.
+
+   Detection needs three regular payments, which a subscription taken out yesterday has not got. "Add a bill"
+   writes one down directly: it joins the list marked as declared, and its own payments are counted underneath it
+   as they arrive. */
 import { AnimatePresence, motion } from "motion/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useToast } from "../components/Toast";
-import { Avatar, Chip, Empty, ErrorBox, Icon, PageHead, Skeleton } from "../components/ui";
+import { Avatar, Chip, Empty, ErrorBox, Icon, PageHead, Sheet, Skeleton, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { dateLabel, money } from "../lib/format";
 import { useStatus } from "../lib/status";
@@ -41,6 +45,67 @@ function AutoSwitch({ on, busy, onChange }: { on: boolean; busy: boolean; onChan
   );
 }
 
+const CADENCES = ["weekly", "fortnightly", "monthly", "quarterly", "yearly"] as const;
+
+/** Writing down a bill the detector has not seen yet. Four facts and a choice: who, how much, how often, and
+    whether we should file it ourselves from now on. */
+function AddBill({ open, onClose, onAdded, currency }: { open: boolean; onClose: () => void; onAdded: (name: string, auto: boolean) => void; currency: string }) {
+  const toast = useToast();
+  const [merchant, setMerchant] = useState("");
+  const [amount, setAmount] = useState("");
+  const [cadence, setCadence] = useState<(typeof CADENCES)[number]>("monthly");
+  const [nextDue, setNextDue] = useState("");
+  const [auto, setAuto] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setMerchant(""); setAmount(""); setCadence("monthly"); setAuto(false);
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    setNextDue(d.toISOString().slice(0, 10));
+  }, [open]);
+
+  const value = Number(amount.replace(/[^\d.]/g, ""));
+  const ready = merchant.trim().length > 0 && value > 0 && !!nextDue;
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await api.post("/recurring", { merchant: merchant.trim(), amount: value, cadence, next_due: nextDue, autopay: auto });
+      onAdded(merchant.trim(), auto);
+      onClose();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), "err");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Add a bill" sub="For a subscription the detector has not seen three payments of yet.">
+      <div className="stack">
+        <div className="field"><label htmlFor="s-merchant">Paid to</label>
+          <input id="s-merchant" className="input" value={merchant} onChange={(e) => setMerchant(e.target.value)} placeholder="Netflix" maxLength={120} autoFocus /></div>
+        <div className="field"><label htmlFor="s-amount">Amount each time</label>
+          <input id="s-amount" className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="649" /></div>
+        <div className="row two">
+          <div className="field"><label htmlFor="s-cadence">How often</label>
+            <select id="s-cadence" className="select" value={cadence} onChange={(e) => setCadence(e.target.value as typeof cadence)}>
+              {CADENCES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select></div>
+          <div className="field"><label htmlFor="s-due">Next one due</label>
+            <input id="s-due" className="input" type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} /></div>
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+          <span>File it for me each cycle{value > 0 ? ` · ${money(value, currency)} on the day` : ""}</span>
+        </label>
+        <button className="btn primary" disabled={!ready || busy} onClick={() => void submit()}>{busy ? <Spinner /> : "Add bill"}</button>
+        <p className="small muted" style={{ margin: 0 }}>Nothing is filed for a date that has not arrived, and your own payments to this merchant are counted against it as they come in.</p>
+      </div>
+    </Sheet>
+  );
+}
+
 export default function Subscriptions() {
   const { currency } = useStatus();
   const toast = useToast();
@@ -49,6 +114,7 @@ export default function Subscriptions() {
   const [only, setOnly] = useState<"all" | "auto" | "soon">("all");
   const [pending, setPending] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const all = useMemo(() => (r.data?.items ?? []).filter((i) => includeTransfers || i.category_kind !== "transfer"), [r.data, includeTransfers]);
   const items = useMemo(() => {
@@ -61,6 +127,17 @@ export default function Subscriptions() {
   const autoCount = all.filter((i) => i.autopay?.active).length;
   const filed = all.reduce((n, i) => n + (i.autopay?.posted_count ?? 0), 0);
   const paid12 = all.reduce((n, i) => n + i.paid_12m, 0);
+
+  const forget = async (u: Recurring) => {
+    setPending(u.key);
+    try {
+      await api.post("/recurring/autopay/clear", { merchant: u.merchant });
+      await r.reload();
+      toast(`${u.merchant} removed. Its payments stay in your ledger.`, "ok");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), "err");
+    } finally { setPending(null); }
+  };
 
   const toggle = async (u: Recurring, next: boolean) => {
     setPending(u.key);
@@ -80,9 +157,12 @@ export default function Subscriptions() {
 
   return (
     <>
-      <PageHead title="Subscriptions & bills" sub="Found in your own history: anything that repeats weekly, monthly, quarterly or yearly.">
+      <PageHead title="Subscriptions & bills" sub="Found in your own history: anything that repeats weekly, monthly, quarterly or yearly — plus whatever you add here.">
         <Chip onClick={() => setIncludeTransfers((v) => !v)} on={includeTransfers} title="SIPs, card bill payments and other transfers">Include SIPs & transfers</Chip>
+        <button className="btn sm primary" onClick={() => setAdding(true)}><Icon name="plus" />Add a bill</button>
       </PageHead>
+      <AddBill open={adding} onClose={() => setAdding(false)} currency={currency}
+        onAdded={(name, auto) => { void r.reload(); toast(auto ? `${name} added · each cycle files itself` : `${name} added`, "ok"); }} />
       {r.error ? <ErrorBox>{r.error}</ErrorBox> : null}
 
       {r.data ? (
@@ -128,8 +208,11 @@ export default function Subscriptions() {
                   <button type="button" className="item head" onClick={() => setOpen(shown ? null : u.key)} aria-expanded={shown}>
                     <Avatar name={u.merchant} neutral />
                     <div className="grow">
-                      <div className="t">{u.merchant}{auto ? <span className="tag"><Icon name="bolt" />autopay</span> : null}</div>
-                      <div className="s">{u.cadence}{u.amount_varies ? " · amount varies" : ""} · {u.category ?? "uncategorized"} · paid {u.occurrences}×</div>
+                      <div className="t">{u.merchant}
+                        {auto ? <span className="tag"><Icon name="bolt" />autopay</span> : null}
+                        {u.declared ? <span className="tag quiet" title="You added this one; it was not read out of a payment rhythm">added</span> : null}
+                      </div>
+                      <div className="s">{u.cadence}{u.amount_varies ? " · amount varies" : ""} · {u.category ?? "uncategorized"} · {u.occurrences ? `paid ${u.occurrences}×` : "no payment seen yet"}</div>
                     </div>
                     <div className="right">
                       <div className="amt num">{money(u.amount, currency)}</div>
@@ -145,8 +228,8 @@ export default function Subscriptions() {
                           <div><span>Paid</span><b>{u.occurrences}×</b></div>
                           <div><span>This year</span><b>{u.count_this_year}× · {money(u.paid_this_year, currency)}</b></div>
                           <div><span>Last 12 months</span><b>{money(u.paid_12m, currency)}</b></div>
-                          <div><span>Since {dateLabel(u.first_date)}</span><b>{money(u.paid_total, currency)}</b></div>
-                          <div><span>Last paid</span><b>{dateLabel(u.last_date)} · {money(u.last_amount, currency)}</b></div>
+                          {u.first_date ? <div><span>Since {dateLabel(u.first_date)}</span><b>{money(u.paid_total, currency)}</b></div> : null}
+                          <div><span>Last paid</span><b>{u.last_date ? `${dateLabel(u.last_date)} · ${money(u.last_amount, currency)}` : "not yet"}</b></div>
                           {u.autopay ? <div><span>Autopay filed</span><b>{u.autopay.posted_count}× {u.autopay.last_posted_on ? `· last ${dateLabel(u.autopay.last_posted_on)}` : ""}</b></div> : null}
                         </div>
                         <div className="sub-acts">
@@ -155,6 +238,8 @@ export default function Subscriptions() {
                           </Link>
                           {auto ? <span className="small muted">Next one files itself on {dateLabel(u.autopay!.next_due)}.</span>
                                 : <span className="small muted">Autopay would file {money(u.amount, currency)} on {dateLabel(u.next_due)}.</span>}
+                          {u.declared ? <button className="btn sm ghost danger-text" onClick={() => void forget(u)} disabled={pending === u.key}>
+                            {pending === u.key ? <Spinner /> : <><Icon name="trash" />Remove this bill</>}</button> : null}
                         </div>
                       </motion.div>
                     ) : null}

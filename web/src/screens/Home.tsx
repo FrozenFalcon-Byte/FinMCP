@@ -70,7 +70,9 @@ export default function Home() {
             </Ring>
           ) : null}
         </div>
-        {spark.length && daily.data ? <Sparkline values={spark.map((p) => p.v)} labels={spark.map((p) => p.d)} /> : <Skeleton h={76} style={{ marginTop: 18 }} />}
+        {spark.length && daily.data
+          ? <Sparkline values={spark.map((p) => p.v)} labels={spark.map((p) => dayLabel(p.d))} format={(v) => money(v, currency)} empty="nothing spent" />
+          : <Skeleton h={76} style={{ marginTop: 18 }} />}
         <div className="mini-stats">
           <div className="mini accent">
             <div className="k">Safe to spend</div>
@@ -78,6 +80,7 @@ export default function Home() {
             <div className="s">{sts?.basis === "budget" ? `${money(Math.max(0, sts.left ?? 0), currency)} left of ${compact(sts.budget_total ?? 0, currency)}`
               : sts?.basis === "plan" ? `${money(Math.max(0, sts.left ?? 0), currency)} left of the ${compact(sts.plan_total ?? 0, currency)} you planned to spend`
               : sts?.basis === "average" ? "based on your 3-month average" : "set budgets to see this"}</div>
+            {sts ? <Basis sts={sts} currency={currency} /> : null}
           </div>
           <div className="mini">
             <div className="k">Coming up</div>
@@ -209,6 +212,24 @@ function WhereItWent({ o, currency, onPick }: { o: Overview; currency: string; o
       </div>
     </div>
   );
+}
+
+/** Where the number above came from.
+
+    Budgets outrank the plan, so a take-home that has been changed can leave this card looking untouched. Naming
+    the source — and linking to it — is the difference between a number that is wrong and one that is explained. */
+function Basis({ sts, currency }: { sts: NonNullable<Overview["safe_to_spend"]>; currency: string }) {
+  if (sts.basis === "budget") {
+    return (
+      <div className="basis">
+        from your <Link to="/app/budgets">budgets</Link>
+        {sts.plan_total ? <>, not the {compact(sts.plan_total, currency)} your <Link to="/app/profile">take-home</Link> leaves</> : null}
+      </div>
+    );
+  }
+  if (sts.basis === "plan") return <div className="basis">from your <Link to="/app/profile">take-home</Link>{sts.keep_pct ? `, less the ${sts.keep_pct}% you keep back` : ""}</div>;
+  if (sts.basis === "average") return <div className="basis"><Link to="/app/budgets">Set budgets</Link> for a firmer number</div>;
+  return <div className="basis"><Link to="/app/profile">Add your take-home</Link> to see this</div>;
 }
 
 /** The month's spend, counted up on arrival. */

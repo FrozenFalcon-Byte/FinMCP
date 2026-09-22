@@ -8,7 +8,7 @@ You track money in a calm web app: add an expense in plain words, see what you h
 Web app ──┐
 Assistant ─┤                        ┌── categorisation memory
 Claude Desktop ─┼──► FinMCP MCP server ├── budgets, recurring detection, goals
-Claude Code ────┤   (32 tools, 13 resources, 4 prompts)   ├── statement / receipt / SMS parsing
+Claude Code ────┤   (33 tools, 13 resources, 4 prompts)   ├── statement / receipt / SMS parsing
 Cursor, scripts ┘                        └── read-only SQL over your rows
                               │
                               ▼
@@ -138,7 +138,7 @@ The endpoint is Streamable HTTP at `/mcp`, bearer-token authenticated, one serve
 
 ```
 finmcp/                 the MCP server and everything it owns
-  server.py             32 tools, 13 resources, 4 prompts; per-account TenantState; principal from the request
+  server.py             33 tools, 13 resources, 4 prompts; per-account TenantState; principal from the request
   db/database.py        psycopg pool, migrations, Database.tenant(user_id) = RLS-scoped transaction
   db/repository.py      every SQL statement; writes stamped with the client and published on the change feed
   db/accounts.py        profiles, local password accounts, personal MCP tokens
