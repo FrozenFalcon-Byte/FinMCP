@@ -23,12 +23,18 @@
 .onb-count { font-size: 13px; font-weight: 700; color: var(--soft); letter-spacing: .04em; }
 
 /* ------------------------------------------------------------ layout */
-.onb-body { flex: 1; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(24px, 5vw, 80px);
+/* Two columns with real minimums, so the split gives way to the stack at the width where it stops working
+   rather than at a width someone guessed. `center` only while the window is tall enough to centre anything. */
+.onb-body { flex: 1; display: grid; grid-template-columns: minmax(300px, 0.92fr) minmax(360px, 1.08fr); gap: clamp(22px, 4vw, 72px);
   align-items: center; max-width: 1280px; width: 100%; margin: 0 auto; padding: 8px clamp(20px, 4vw, 56px) 40px; }
+@media (max-height: 800px) { .onb-body { align-items: start; padding-top: 0; padding-bottom: 32px; } }
 
 /* ------------------------------------------------------------ the assembling dashboard */
-.onb-stage { display: flex; flex-direction: column; gap: 16px; }
-.onb-preview { background: linear-gradient(170deg, #fbfbff, #f3f4ff 60%, #eef0ff);
+.onb-stage { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+/* A floor under the card: the preview grows as answers arrive, and without one the whole column would jump
+   every time a bar appeared. */
+.onb-preview { background: linear-gradient(170deg, #fbfbff, #f3f4ff 60%, #eef0ff); min-width: 0;
+  height: clamp(330px, 46vh, 430px); display: flex; flex-direction: column;
   border: 1px solid var(--edge); border-radius: 26px; padding: 22px; box-shadow: 0 24px 60px rgba(15, 12, 58, .10); }
 .onb-preview .row.head { display: flex; align-items: center; gap: 12px; }
 .onb-preview .pfp { width: 44px; height: 44px; border-radius: 50%; background: #fff; border: 1px solid var(--edge);
@@ -42,14 +48,18 @@
 .onb-preview .big .k { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--soft); }
 .onb-preview .big .v { font: 800 clamp(26px, 3vw, 38px) var(--disp); letter-spacing: -.03em; color: var(--navy); line-height: 1.1; margin-top: 2px; }
 .onb-preview .big .s { font-size: 13px; color: var(--mute); margin-top: 2px; }
-.onb-preview .bars { margin-top: 18px; display: flex; flex-direction: column; gap: 9px; min-height: 40px; }
+/* The rows take whatever the frame has left; a category that does not fit simply is not previewed. */
+.onb-preview .bars { margin-top: 18px; flex: 1; min-height: 40px; min-width: 0; display: flex; flex-direction: column; gap: 9px; overflow: hidden; }
 .onb-preview .bar { display: grid; grid-template-columns: minmax(64px, 100px) 1fr auto; align-items: center; gap: 10px; font-size: 12.5px; overflow: hidden; }
 .onb-preview .bar .l { color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .onb-preview .bar .t { height: 7px; border-radius: 999px; background: #fff; overflow: hidden; }
 .onb-preview .bar .t i { display: block; height: 100%; border-radius: 999px; background: var(--b); transform-origin: left center; }
 .onb-preview .bar .a { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
-.onb-preview .bar.ghost .l { color: var(--soft); font-style: italic; }
-.onb-preview .goal { margin-top: 16px; display: flex; align-items: center; gap: 9px; background: #fff; border: 1px solid var(--edge);
+.onb-preview .bar.ghost { opacity: .5; }
+.onb-preview .bar.ghost .l { color: var(--soft); }
+.onb-preview .bar.ghost .t i { width: 22%; background: var(--soft); }
+.onb-preview .bar.ghost .a { color: var(--soft); font-weight: 600; }
+.onb-preview .goal { flex: none; margin-top: 14px; display: flex; align-items: center; gap: 9px; background: #fff; border: 1px solid var(--edge);
   border-radius: 14px; padding: 10px 13px; font-size: 13px; }
 .onb-preview .goal svg { width: 15px; height: 15px; color: var(--b); }
 .onb-preview .goal b { margin-left: auto; }
@@ -62,7 +72,10 @@
 .onb-blurb { color: var(--mute); font-size: 16px; line-height: 1.5; margin-top: 12px; max-width: 46ch; }
 .onb-fields { display: flex; flex-direction: column; gap: 18px; margin-top: 26px; }
 .onb-field { display: flex; flex-direction: column; gap: 7px; }
-.onb-field.narrow { max-width: 150px; }
+/* A narrow input, not a narrow label: "Day it lands" should not wrap to fit its own box. */
+.onb-field.narrow { max-width: none; align-items: flex-start; }
+.onb-field.narrow input { max-width: 150px; }
+.onb-field .lab { white-space: nowrap; }
 .onb-field .lab { font-size: 13px; font-weight: 700; color: var(--ink); display: flex; align-items: center; gap: 8px; }
 .onb-field .lab i { font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
   color: var(--b); background: var(--tint); padding: 2px 7px; border-radius: 999px; }
@@ -96,7 +109,7 @@
 .onb-cats .cat.on { border-color: var(--b); color: var(--ink); background: var(--tint); }
 .onb-cats .cat.on .tick { background: var(--b); color: #fff; }
 .onb-cats .cat.on i { color: var(--b); }
-.onb-amounts { display: flex; flex-direction: column; gap: 8px; max-height: 232px; overflow-y: auto; }
+.onb-amounts { display: flex; flex-direction: column; gap: 8px; max-height: min(232px, 34vh); overflow-y: auto; padding-right: 2px; }
 .onb-amount-row { display: grid; grid-template-columns: 1fr 150px; align-items: center; gap: 12px; }
 .onb-amount-row .n { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .onb-amount-row .n i { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--b); }
@@ -113,17 +126,24 @@
 .onb-slider-out span { font-size: 12.5px; color: var(--mute); }
 
 .onb-photo { display: flex; align-items: center; gap: 18px; }
-.onb-photo .drop { width: 92px; height: 92px; border-radius: 50%; border: 2px dashed var(--edge); background: #fbfbfd; color: var(--soft);
-  display: grid; place-items: center; gap: 2px; cursor: pointer; overflow: hidden; padding: 0; transition: border-color .2s, color .2s; flex: none; }
+/* One circle, one icon, centred — with the "+" riding the edge so the ring reads as something you click rather
+   than a label squeezed into a 92px disc. */
+.onb-photo .drop { position: relative; width: 92px; height: 92px; border-radius: 50%; border: 2px dashed var(--edge); background: #fbfbfd; color: var(--soft);
+  display: grid; place-items: center; cursor: pointer; padding: 0; transition: border-color .2s, color .2s, background .2s; flex: none; }
 .onb-photo .drop:hover { border-color: var(--b); color: var(--b); }
-.onb-photo .drop svg { width: 22px; height: 22px; }
-.onb-photo .drop span { font-size: 10.5px; font-weight: 700; }
-.onb-photo .drop.has { border-style: solid; border-color: var(--b); }
+.onb-photo .drop > svg { width: 30px; height: 30px; }
+.onb-photo .drop:hover { background: #fff; }
+.onb-photo .drop .badge { position: absolute; right: -1px; bottom: -1px; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--b); color: #fff; border: 3px solid #fff; display: grid; place-items: center; transition: transform .2s var(--ease, ease); }
+.onb-photo .drop .badge svg { width: 14px; height: 14px; }
+.onb-photo .drop:hover .badge { transform: scale(1.08); }
+.onb-photo .drop.has { border-style: solid; border-color: var(--b); overflow: visible; }
+.onb-photo .drop img { border-radius: 50%; }
 .onb-photo .drop img { width: 100%; height: 100%; object-fit: cover; }
 .onb-photo-side p { font-size: 13.5px; color: var(--mute); margin-top: 6px; max-width: 32ch; }
 .onb-link { border: 0; background: none; padding: 0; margin-top: 8px; font: 700 13px "Figtree", system-ui, sans-serif; color: var(--b); cursor: pointer; }
 
-.onb-summary { list-style: none; margin: 26px 0 0; padding: 0; display: flex; flex-direction: column; }
+.onb-summary { list-style: none; margin: 26px 0 0; padding: 0; display: flex; flex-direction: column; max-height: min(320px, 42vh); overflow-y: auto; }
 .onb-summary li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--edge); font-size: 15px; }
 .onb-summary li span { color: var(--mute); }
 .onb-summary li b { font-weight: 700; text-align: right; }
@@ -146,14 +166,28 @@
 .onb-go.waiting { background: var(--soft); box-shadow: none; }
 .onb-go:disabled { opacity: .6; cursor: default; }
 
-/* ------------------------------------------------------------ phone */
+/* ------------------------------------------------------------ narrower */
+/* Still two columns, but neither of them has room to be generous. */
+@media (max-width: 1120px) and (min-width: 901px) {
+  .onb-body { gap: 30px; padding-left: 24px; padding-right: 24px; }
+  .onb h1 { font-size: clamp(28px, 3.6vw, 40px); }
+  .onb-blurb { font-size: 15px; margin-top: 10px; }
+  .onb-fields { margin-top: 20px; gap: 15px; }
+  .onb-preview { padding: 18px; height: clamp(300px, 42vh, 380px); }
+  .onb-preview .big { margin-top: 14px; }
+  .onb-preview .big .v { font-size: 28px; }
+  .onb-preview .bar { grid-template-columns: minmax(54px, 84px) 1fr auto; }
+  .onb-go { min-width: 168px; }
+}
+
 @media (max-width: 900px) {
   .onb-body { grid-template-columns: 1fr; align-items: start; gap: 22px; padding-bottom: 28px; }
   .onb-stage { order: 2; }
   .onb-ask { order: 1; }
   .onb-stage-note { display: none; }
-  .onb-preview { padding: 18px; border-radius: 22px; }
+  .onb-preview { padding: 18px; border-radius: 22px; height: auto; min-height: 210px; }
   .onb-preview .bars { max-height: 120px; overflow: hidden; }
+  .onb-body { max-width: 640px; }
 }
 @media (max-width: 620px) {
   .onb-top { padding: 14px 18px calc(10px + env(safe-area-inset-top, 0px)); gap: 12px; }
@@ -164,7 +198,18 @@
   .onb-pair { grid-template-columns: 1fr; }
   .onb-amount-row { grid-template-columns: 1fr 120px; }
   .onb-go { min-width: 0; flex: 1; }
-  .onb-slider-out { min-width: 108px; }
+  .onb-slider-out { min-width: 100px; }
+  .onb-slider { gap: 12px; }
+  .onb-photo { gap: 14px; }
+  .onb-photo .drop { width: 78px; height: 78px; }
+  .onb-actions { gap: 10px; }
+  .onb-summary li { padding: 11px 0; font-size: 14px; }
+}
+/* A genuinely small phone: the amount rows stop pretending to be two columns. */
+@media (max-width: 400px) {
+  .onb-amount-row { grid-template-columns: 1fr; gap: 6px; }
+  .onb-amount input { font-size: 22px; }
+  .onb-body { padding-left: 16px; padding-right: 16px; }
 }
 
 @media (prefers-color-scheme: dark) {

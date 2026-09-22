@@ -15,12 +15,38 @@ router = APIRouter(tags=["ledger"])
 
 @router.get("/overview")
 async def overview(ctx: AppContext = Depends(get_ctx)) -> Any:
+    # Opening the app is when a bill that came due while you were away gets filed. The run is idempotent and a
+    # no-op when nothing is due, so it costs one indexed query on the common path.
+    await call_tool(ctx, "run_autopay", {})
     return await call_tool(ctx, "get_overview", {})
 
 
 @router.get("/recurring")
 async def recurring(ctx: AppContext = Depends(get_ctx)) -> Any:
+    await call_tool(ctx, "run_autopay", {})
     return await call_tool(ctx, "list_recurring", {})
+
+
+class AutopayBody(BaseModel):
+    merchant: str = Field(min_length=1, max_length=120)
+    active: bool = True
+    amount: float | None = Field(default=None, gt=0)
+    next_due: str | None = None
+
+
+@router.post("/recurring/autopay")
+async def set_autopay(body: AutopayBody, ctx: AppContext = Depends(get_ctx)) -> Any:
+    return await call_tool(ctx, "set_autopay", body.model_dump(exclude_none=True))
+
+
+@router.post("/recurring/autopay/clear")
+async def clear_autopay(body: AutopayBody, ctx: AppContext = Depends(get_ctx)) -> Any:
+    return await call_tool(ctx, "clear_autopay", {"merchant": body.merchant})
+
+
+@router.post("/recurring/autopay/run")
+async def run_autopay(ctx: AppContext = Depends(get_ctx)) -> Any:
+    return await call_tool(ctx, "run_autopay", {})
 
 
 @router.get("/activity")

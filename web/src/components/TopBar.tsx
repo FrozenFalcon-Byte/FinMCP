@@ -97,12 +97,30 @@ function OmniSearch() {
   );
 }
 
+/** The bar sits still while the page scrolls under it, so it only draws its own edge once there is something
+    behind it to separate from. The page is the scroller, not the window. */
+function useLifted(): boolean {
+  const [lifted, setLifted] = useState(false);
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>(".content");
+    if (!el) return;
+    const read = () => setLifted(el.scrollTop > 4);
+    read();
+    el.addEventListener("scroll", read, { passive: true });
+    return () => el.removeEventListener("scroll", read);
+  }, []);
+  return lifted;
+}
+
 export function TopBar({ children }: { children?: ReactNode }) {
+  const lifted = useLifted();
   return (
-    <div className="topbar">
-      <OmniSearch />
-      <AddButton className="btn sm primary topbar-add" label="Add" />
-      {children}
+    <div className={`topbar ${lifted ? "lifted" : ""}`}>
+      <div className="topbar-in">
+        <OmniSearch />
+        <AddButton className="btn sm primary topbar-add" label="Add" />
+        {children}
+      </div>
     </div>
   );
 }

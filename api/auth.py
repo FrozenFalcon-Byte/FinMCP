@@ -113,11 +113,23 @@ class Authenticator:
         profile = self.ensure_profile(user_id, email, name)
         return Principal(user_id=profile.id, email=profile.email, name=profile.name, via=self.mode)
 
+    def _decode_local(self, token: str) -> dict[str, Any] | None:
+        try:
+            return jwt.decode(token, self.settings.jwt_secret, algorithms=["HS256"], audience=AUDIENCE, issuer=LOCAL_ISSUER,
+                              options={"require": ["sub", "exp"]})
+        except jwt.PyJWTError as exc:
+            log.debug("local token rejected: %s", exc)
+            return None
+
     def decode(self, token: str) -> dict[str, Any] | None:
         try:
             if self.mode == "local":
-                return jwt.decode(token, self.settings.jwt_secret, algorithms=["HS256"], audience=AUDIENCE, issuer=LOCAL_ISSUER,
-                                  options={"require": ["sub", "exp"]})
+                return self._decode_local(token)
+            # A passkey is this API's own proof, not Supabase's, so a passkey sign-in mints a token signed with our
+            # secret. It is accepted here beside Supabase's own — recognised by its issuer, and verified with a key
+            # Supabase never sees, so neither kind can be passed off as the other.
+            if str(jwt.decode(token, options={"verify_signature": False}).get("iss") or "") == LOCAL_ISSUER:
+                return self._decode_local(token)
             header = jwt.get_unverified_header(token)
             alg = str(header.get("alg", ""))
             if alg == "HS256":

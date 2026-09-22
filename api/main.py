@@ -20,7 +20,7 @@ from finmcp.db.accounts import Principal
 
 from .deps import Registry, current_principal, get_registry
 from .mcp_http import build_mcp_app, run_session_manager
-from .routes import auth, chat, connect, events, imports, ledger, mcp
+from .routes import auth, chat, connect, events, imports, ledger, mcp, passkeys
 
 log = logging.getLogger("finmcp.api")
 WEB_DIST = ROOT / "web" / "dist"
@@ -77,6 +77,7 @@ def create_app() -> FastAPI:
                        allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
                        expose_headers=["mcp-session-id", "mcp-protocol-version"])
     app.include_router(auth.router, prefix="/api")
+    app.include_router(passkeys.router, prefix="/api")
     app.include_router(chat.router, prefix="/api")
     app.include_router(ledger.router, prefix="/api")
     app.include_router(imports.router, prefix="/api")

@@ -239,6 +239,57 @@ class AccountStore:
             raise ValueError("That account no longer exists.")
         return self.upsert_profile(user_id, row["email"], row["name"])
 
+    # ---- passkeys
+    #
+    # Read before anyone is signed in, so all of this runs on the admin connection, the same way local passwords do.
+    # Nothing here is a secret of ours: the private key stays on the person's device.
+
+    def list_passkeys(self, user_id: str) -> list[dict[str, Any]]:
+        with self.db.admin() as conn:
+            rows = conn.execute(
+                "SELECT id, credential_id, label, transports, created_at, last_used_at FROM passkeys WHERE user_id = %s ORDER BY created_at DESC",
+                (user_id,),
+            ).fetchall()
+        return [dict(clean_row(r)) for r in rows]
+
+    def passkey_ids(self, user_id: str) -> list[str]:
+        """Credential ids already registered, so the browser does not offer to enrol the same device twice."""
+        with self.db.admin() as conn:
+            rows = conn.execute("SELECT credential_id FROM passkeys WHERE user_id = %s", (user_id,)).fetchall()
+        return [str(r["credential_id"]) for r in rows]
+
+    def add_passkey(self, user_id: str, *, credential_id: str, public_key: bytes, sign_count: int,
+                    label: str | None = None, transports: str | None = None) -> dict[str, Any]:
+        with self.db.admin() as conn:
+            row = conn.execute(
+                """INSERT INTO passkeys (user_id, credential_id, public_key, sign_count, label, transports)
+                   VALUES (%s, %s, %s, %s, %s, %s)
+                   ON CONFLICT (credential_id) DO UPDATE SET public_key = EXCLUDED.public_key, sign_count = EXCLUDED.sign_count
+                   RETURNING id, credential_id, label, transports, created_at, last_used_at""",
+                (user_id, credential_id, public_key, int(sign_count), (label or "").strip() or None, transports),
+            ).fetchone()
+        return dict(clean_row(row))  # type: ignore[arg-type]
+
+    def find_passkey(self, credential_id: str) -> dict[str, Any] | None:
+        """The credential and whose it is. `public_key` comes back as bytes for the verifier."""
+        with self.db.admin() as conn:
+            row = conn.execute(
+                "SELECT id, user_id, credential_id, public_key, sign_count FROM passkeys WHERE credential_id = %s", (credential_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return {"id": int(row["id"]), "user_id": str(row["user_id"]), "credential_id": str(row["credential_id"]),
+                "public_key": bytes(row["public_key"]), "sign_count": int(row["sign_count"])}
+
+    def touch_passkey(self, passkey_id: int, sign_count: int) -> None:
+        with self.db.admin() as conn:
+            conn.execute("UPDATE passkeys SET sign_count = %s, last_used_at = now() WHERE id = %s", (int(sign_count), passkey_id))
+
+    def delete_passkey(self, user_id: str, passkey_id: int) -> bool:
+        with self.db.admin() as conn:
+            row = conn.execute("DELETE FROM passkeys WHERE id = %s AND user_id = %s RETURNING id", (passkey_id, user_id)).fetchone()
+        return row is not None
+
     def count_local_users(self) -> int:
         with self.db.admin() as conn:
             return int(conn.execute("SELECT COUNT(*) AS n FROM local_users").fetchone()["n"])  # type: ignore[index]

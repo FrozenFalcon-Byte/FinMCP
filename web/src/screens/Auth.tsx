@@ -4,6 +4,7 @@ import { Link, Navigate, useLocation, useOutlet } from "react-router-dom";
 import { useCurtain } from "../components/Curtain";
 import { Icon } from "../components/ui";
 import { useAuth } from "../lib/auth";
+import { builtIn, readError, supported } from "../lib/passkey";
 
 const PROVIDER_LABEL: Record<string, string> = { google: "Google", github: "GitHub", apple: "Apple", azure: "Microsoft", discord: "Discord", twitter: "X" };
 
@@ -34,7 +35,7 @@ export function AuthLayout() {
 }
 
 export default function AuthScreen({ mode }: { mode: "login" | "register" }) {
-  const { user, ready, config, login, register, loginWithProvider } = useAuth();
+  const { user, ready, config, login, register, loginWithProvider, loginWithPasskey } = useAuth();
   const location = useLocation();
   const next = new URLSearchParams(location.search).get("next") || "/app";
   const [name, setName] = useState("");
@@ -44,6 +45,11 @@ export default function AuthScreen({ mode }: { mode: "login" | "register" }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
+  /* Passkeys are offered only where they can actually work, and worded by what this device can do: a laptop with
+     Touch ID says so, one without still gets the button because a phone can stand in for it. */
+  const [onDevice, setOnDevice] = useState(false);
+  useEffect(() => { void builtIn().then(setOnDevice); }, []);
+  const canPasskey = mode === "login" && supported() && config?.passkeys !== false;
 
   const { go } = useCurtain();
   const leaving = useRef(false); // signing in right now: the curtain takes us to the app, not the redirect below
@@ -53,6 +59,23 @@ export default function AuthScreen({ mode }: { mode: "login" | "register" }) {
   if (ready && user && !leaving.current) return <Navigate to={next} replace />;
 
   const enterApp = () => go(next);
+
+  const withPasskey = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      leaving.current = true;
+      await loginWithPasskey();
+      enterApp();
+    } catch (err) {
+      leaving.current = false;
+      const msg = readError(err);          // a cancelled prompt is not a failure worth a red box
+      if (msg) setError(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -93,6 +116,18 @@ export default function AuthScreen({ mode }: { mode: "login" | "register" }) {
             <>
               <h1>{mode === "login" ? "Welcome back" : "Create your ledger"}</h1>
               <div className="sub">{mode === "login" ? "Sign in to pick up where you left off." : "Two fields and you are in. Sample data is optional."}</div>
+              {canPasskey ? (
+                <div className="stack" style={{ gap: 10, marginBottom: 6 }}>
+                  <motion.button type="button" className="btn lg block passkey" onClick={() => void withPasskey()} disabled={busy}
+                    whileHover={{ y: -1 }} whileTap={{ scale: 0.985 }}>
+                    <Icon name="key" />Sign in with a passkey
+                  </motion.button>
+                  <div className="small muted" style={{ textAlign: "center" }}>
+                    {onDevice ? "Your device's screen lock — nothing to remember, nothing to phish." : "Use a passkey saved on this device, or scan with your phone."}
+                  </div>
+                  <div className="or">or with a password</div>
+                </div>
+              ) : null}
               {providers.length ? (
                 <div className="stack" style={{ gap: 10, marginBottom: 6 }}>
                   {providers.map((p) => (

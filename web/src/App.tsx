@@ -9,7 +9,7 @@ import { TopBar } from "./components/TopBar";
 import { ToastProvider } from "./components/Toast";
 import { TourProvider } from "./components/Tour";
 import { WakeProvider } from "./components/Wake";
-import { Avatar, Chip, Icon, Sheet, type IconName } from "./components/ui";
+import { Avatar, Icon, Sheet, type IconName } from "./components/ui";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { LedgerProvider } from "./lib/ledger";
 import { StatusProvider, useStatus } from "./lib/status";
@@ -53,14 +53,6 @@ const NAV_2: { to: string; label: string; icon: IconName }[] = [
   { to: "/app/settings", label: "Settings", icon: "settings" },
 ];
 
-function EngineChip() {
-  const { health, error } = useStatus();
-  if (error) return <Chip tone="bad">API offline</Chip>;
-  if (!health) return <Chip>connecting</Chip>;
-  if (health.driver === "openrouter") return <Chip tone="accent" title={`OpenRouter · ${health.model ?? ""}`}><Icon name="spark" />{(health.model ?? "OpenRouter").split("/").pop()}</Chip>;
-  return health.driver === "anthropic" ? <Chip tone="accent"><Icon name="spark" />Claude</Chip> : <Chip title="Add OPENROUTER_API_KEY to .env for model-powered answers and categorisation">offline engine</Chip>;
-}
-
 /** The active-page highlight: one element that glides from the old nav item to the new one. */
 function NavPill() {
   return <motion.span layoutId="nav-pill" className="nav-pill" transition={{ type: "spring", stiffness: 520, damping: 40 }} />;
@@ -75,10 +67,10 @@ function Sidebar() {
       <Link to="/" className="brand"><span className="mark"><Icon name="logo" /></span><span className="word">FinMCP</span></Link>
       <nav className="nav">
         {NAV.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.end}>{({ isActive }) => <>{isActive ? <NavPill /> : null}<Icon name={n.icon} />{n.label}{n.to === "/app/transactions" && review ? <span className="badge">{review}</span> : null}</>}</NavLink>
+          <NavLink key={n.to} to={n.to} end={n.end} title={n.label}>{({ isActive }) => <>{isActive ? <NavPill /> : null}<Icon name={n.icon} />{n.label}{n.to === "/app/transactions" && review ? <span className="badge">{review}</span> : null}</>}</NavLink>
         ))}
         <div className="sep" />
-        {NAV_2.map((n) => <NavLink key={n.to} to={n.to}>{({ isActive }) => <>{isActive ? <NavPill /> : null}<Icon name={n.icon} />{n.label}</>}</NavLink>)}
+        {NAV_2.map((n) => <NavLink key={n.to} to={n.to} title={n.label}>{({ isActive }) => <>{isActive ? <NavPill /> : null}<Icon name={n.icon} />{n.label}</>}</NavLink>)}
       </nav>
       <div className="foot">
         {user ? (
@@ -126,7 +118,12 @@ const PAGE = {
   animate: { opacity: 1, transition: { duration: 0.3, ease: EASE } },
   exit: { opacity: 0, transition: { duration: 0.12, ease: "easeIn" as const } },
 };
-const toTop = () => window.scrollTo(0, 0);
+/* The page scrolls inside `.content`, not the window, so a page change resets that box. `instant` because it
+   happens while nothing is on screen — a smooth scroll there reads as the new page arriving crooked. */
+const toTop = () => {
+  document.querySelector(".content")?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  window.scrollTo(0, 0);
+};
 
 function Shell() {
   const location = useLocation();
@@ -138,10 +135,10 @@ function Shell() {
         <div className="shell">
           <Sidebar />
           <main className="main">
-            <TopBar><span className="engine"><EngineChip /></span></TopBar>
+            <TopBar />
             <div className="content">
               <AnimatePresence mode="wait" initial={false} onExitComplete={toTop}>
-                <motion.div key={location.pathname} {...PAGE}>
+                <motion.div key={location.pathname} className="page-frame" {...PAGE}>
               <Routes location={location}>
                 <Route index element={<Home />} />
                 <Route path="transactions" element={<Transactions />} />

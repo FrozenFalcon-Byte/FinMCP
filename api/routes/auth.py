@@ -88,6 +88,7 @@ async def auth_config(reg: Registry = Depends(get_registry)) -> dict[str, Any]:
         "min_password": MIN_PASSWORD,
         "public_url": s.public_url,
         "mcp_endpoint": f"{s.public_url}/mcp",
+        "passkeys": True,
     }
 
 

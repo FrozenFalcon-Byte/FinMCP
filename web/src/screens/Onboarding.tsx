@@ -111,7 +111,10 @@ function Stage({ d, step }: { d: Draft; step: number }) {
 
   return (
     <div className="onb-stage" aria-hidden="true">
-      <motion.div className="onb-preview" layout transition={SPRING}>
+      {/* Fixed height on purpose. This card grew as answers arrived, and animating that meant motion scaling the
+          whole panel — which squashes every line of text inside it for the length of the animation, and looked
+          different at every window size. Now the frame holds still and only what is inside it moves. */}
+      <div className="onb-preview">
         <div className="row head">
           <motion.span className={`pfp ${d.avatar ? "has" : ""}`} layout transition={SPRING}>
             {d.avatar ? <img src={d.avatar} alt="" /> : <Icon name="user" />}
@@ -150,7 +153,13 @@ function Stage({ d, step }: { d: Draft; step: number }) {
                   <span className="a">{amount ? compact(amount, d.currency) : "—"}</span>
                 </motion.div>
               );
-            }) : <motion.div key="hint" className="bar ghost" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><span className="l">Your categories appear here</span></motion.div>}
+            }) : [0, 1, 2].map((k) => (
+              <motion.div key={`ghost-${k}`} className="bar ghost" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, delay: 0.05 * k }}>
+                <span className="l">{k === 0 ? "Your categories" : ""}</span>
+                <span className="t"><i /></span>
+                <span className="a">—</span>
+              </motion.div>
+            ))}
           </AnimatePresence>
         </motion.div>
 
@@ -163,7 +172,7 @@ function Stage({ d, step }: { d: Draft; step: number }) {
             </motion.div>
           ) : null}
         </AnimatePresence>
-      </motion.div>
+      </div>
 
       <motion.p className="onb-stage-note" key={step} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: EASE }}>
         {step === 0 ? "This is yours. It fills in as you answer."
@@ -302,11 +311,12 @@ export default function Onboarding() {
                   <div className="onb-photo">
                     <button type="button" className={`drop ${d.avatar ? "has" : ""}`} onClick={() => fileRef.current?.click()}
                       onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void photo(e.dataTransfer.files[0]); }}>
-                      {d.avatar ? <img src={d.avatar} alt="Your photo" /> : <><Icon name="user" /><span>Add a photo</span></>}
+                      {d.avatar ? <img src={d.avatar} alt="Your photo" /> : <Icon name="user" />}
+                      <span className="badge"><Icon name="plus" /></span>
                     </button>
                     <div className="onb-photo-side">
                       <span className="lab">Photo <i className="opt">optional</i></span>
-                      <p>Drop one in, or click. It is cropped square and kept small.</p>
+                      <p>{d.avatar ? "Cropped square and kept small, so it follows your account." : "Click the circle or drop an image on it. Cropped square and kept small."}</p>
                       {d.avatar ? <button type="button" className="onb-link" onClick={() => set("avatar", null)}>Remove</button> : null}
                     </div>
                     <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { void photo(e.target.files?.[0]); e.target.value = ""; }} />

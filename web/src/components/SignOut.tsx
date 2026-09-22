@@ -15,5 +15,5 @@ export function SignOutButton({ className = "btn sm ghost", label = "Sign out", 
     onDone?.();
     go("/", { afterSwap: () => void logout() });
   };
-  return <button type="button" className={className} onClick={signOut} disabled={busy}><Icon name="logout" />{label}</button>;
+  return <button type="button" className={className} onClick={signOut} disabled={busy} title={label}><Icon name="logout" />{label}</button>;
 }

@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { clearCache } from "./cache";
 import { api, setAuthToken } from "./api";
 import { cookieStorage, getCookie, removeCookie, setCookie } from "./cookies";
+import { signInWithPasskey } from "./passkey";
 
 export interface AuthUser {
   id: string; email: string; name: string; currency: string; created_at: string;
@@ -25,6 +26,7 @@ export interface AuthConfig {
   supabase_anon_key: string | null;
   oauth_providers: string[];
   min_password: number;
+  passkeys?: boolean;
   public_url: string;
   mcp_endpoint: string;
 }
@@ -40,6 +42,8 @@ interface AuthValue {
   login: (email: string, password: string) => Promise<AuthUser>;
   register: (input: RegisterInput) => Promise<RegisterResult>;
   loginWithProvider: (provider: string) => Promise<void>;
+  /** A passkey is this API's own proof, so it mints this API's own session — in either identity mode. */
+  loginWithPasskey: () => Promise<AuthUser>;
   logout: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   resetPassword: (password: string, token?: string | null) => Promise<AuthUser | null>;
@@ -55,6 +59,7 @@ const AuthContext = createContext<AuthValue>({
   login: async () => { throw new Error("auth not ready"); },
   register: async () => { throw new Error("auth not ready"); },
   loginWithProvider: async () => { throw new Error("auth not ready"); },
+  loginWithPasskey: async () => { throw new Error("auth not ready"); },
   logout: async () => {},
   requestPasswordReset: async () => {},
   resetPassword: async () => null,
@@ -134,9 +139,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         supabaseRef.current = client;
         setSupabase(client);
         const { data } = await client.auth.getSession();
-        await loadUser(data.session?.access_token ?? null);
+        await loadUser(data.session?.access_token ?? readLocal());
         const { data: sub } = client.auth.onAuthStateChange((event, session) => {
-          void loadUser(session?.access_token ?? null);
+          void loadUser(session?.access_token ?? readLocal());
           // A recovery link that Supabase sent to its Site URL instead of ours still ends on the reset form.
           if (event === "PASSWORD_RECOVERY" && window.location.pathname !== "/reset-password") window.location.replace("/reset-password");
         });
@@ -195,6 +200,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(error.message);
   }, []);
 
+  const loginWithPasskey = useCallback(async () => {
+    const r = await signInWithPasskey();
+    writeLocal(r.access_token, r.expires_in);
+    const u = await loadUser(r.access_token);
+    if (!u) throw new Error("Signed in, but the ledger API did not accept the session.");
+    return u;
+  }, [loadUser]);
+
   const logout = useCallback(async () => {
     try { await api.post("/auth/logout"); } catch { /* ignore */ }
     const client = supabaseRef.current;
@@ -233,8 +246,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(() => loadUser(token), [loadUser, token]);
 
-  const value = useMemo<AuthValue>(() => ({ config, user, ready, token, supabase, login, register, loginWithProvider, logout, requestPasswordReset, resetPassword, refreshUser }),
-    [config, user, ready, token, supabase, login, register, loginWithProvider, logout, requestPasswordReset, resetPassword, refreshUser]);
+  const value = useMemo<AuthValue>(() => ({ config, user, ready, token, supabase, login, register, loginWithProvider, loginWithPasskey, logout, requestPasswordReset, resetPassword, refreshUser }),
+    [config, user, ready, token, supabase, login, register, loginWithProvider, loginWithPasskey, logout, requestPasswordReset, resetPassword, refreshUser]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

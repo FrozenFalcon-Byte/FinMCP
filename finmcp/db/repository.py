@@ -475,6 +475,71 @@ class Repository:
             (self.user_id, days),
         )
 
+    # ------------------------------------------------------------------ autopay
+
+    def list_autopay(self) -> list[dict[str, Any]]:
+        return self._all(
+            """SELECT id, merchant_key, merchant, amount::float AS amount, cadence, cadence_days, category,
+                      next_due, active, posted_count, last_posted_on, created_at
+               FROM autopay WHERE user_id = %s ORDER BY next_due ASC, merchant ASC""",
+            (self.user_id,),
+        )
+
+    def get_autopay(self, merchant_key_: str) -> dict[str, Any] | None:
+        return self._one(
+            """SELECT id, merchant_key, merchant, amount::float AS amount, cadence, cadence_days, category,
+                      next_due, active, posted_count, last_posted_on
+               FROM autopay WHERE user_id = %s AND merchant_key = %s""",
+            (self.user_id, merchant_key_),
+        )
+
+    def upsert_autopay(self, *, merchant: str, amount: float, cadence: str, cadence_days: int,
+                       next_due: str, category: str | None = None, active: bool = True) -> dict[str, Any]:
+        """One standing instruction per merchant. Turning an existing one back on keeps its history."""
+        key = merchant_key(merchant)
+        self._exec(
+            """INSERT INTO autopay (user_id, merchant_key, merchant, amount, cadence, cadence_days, category, next_due, active)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+               ON CONFLICT (user_id, merchant_key) DO UPDATE
+                 SET merchant = EXCLUDED.merchant, amount = EXCLUDED.amount, cadence = EXCLUDED.cadence,
+                     cadence_days = EXCLUDED.cadence_days, category = EXCLUDED.category,
+                     next_due = EXCLUDED.next_due, active = EXCLUDED.active""",
+            (self.user_id, key, merchant.strip(), float(amount), cadence, int(cadence_days), category, next_due, bool(active)),
+        )
+        self._emit("autopay", "upsert", None)
+        row = self.get_autopay(key)
+        assert row is not None
+        return row
+
+    def set_autopay_active(self, merchant: str, active: bool) -> dict[str, Any] | None:
+        key = merchant_key(merchant)
+        if self._exec("UPDATE autopay SET active = %s WHERE user_id = %s AND merchant_key = %s", (bool(active), self.user_id, key)):
+            self._emit("autopay", "update", None)
+        return self.get_autopay(key)
+
+    def delete_autopay(self, merchant: str) -> bool:
+        gone = self._exec("DELETE FROM autopay WHERE user_id = %s AND merchant_key = %s", (self.user_id, merchant_key(merchant))) > 0
+        if gone:
+            self._emit("autopay", "delete", None)
+        return gone
+
+    def due_autopay(self, on: str) -> list[dict[str, Any]]:
+        return self._all(
+            """SELECT id, merchant_key, merchant, amount::float AS amount, cadence, cadence_days, category, next_due, posted_count
+               FROM autopay WHERE user_id = %s AND active AND next_due <= %s ORDER BY next_due ASC""",
+            (self.user_id, on),
+        )
+
+    def advance_autopay(self, autopay_id: int, *, next_due: str, posted_on: str | None) -> None:
+        """Move a rule to its next cycle. `posted_on` is None when the entry was already in the ledger."""
+        if posted_on is None:
+            self._exec("UPDATE autopay SET next_due = %s WHERE user_id = %s AND id = %s", (next_due, self.user_id, autopay_id))
+            return
+        self._exec(
+            "UPDATE autopay SET next_due = %s, last_posted_on = %s, posted_count = posted_count + 1 WHERE user_id = %s AND id = %s",
+            (next_due, posted_on, self.user_id, autopay_id),
+        )
+
     def merchant_history(self, merchant: str, limit: int = 60) -> list[dict[str, Any]]:
         """Recent entries whose merchant reads like this one, newest first.
 

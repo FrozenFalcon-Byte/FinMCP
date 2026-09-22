@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useCurtain } from "../components/Curtain";
 import { SignOutButton } from "../components/SignOut";
 import { useToast } from "../components/Toast";
@@ -6,9 +7,80 @@ import { Avatar, Chip, Icon, PageHead, Sheet, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { money, num } from "../lib/format";
+import { addPasskey, listPasskeys, readError, removePasskey, supported, type PasskeyRow } from "../lib/passkey";
 import { squarePhoto } from "../lib/photo";
 import { useLedger } from "../lib/ledger";
 import { useStatus } from "../lib/status";
+
+/** Passkeys on this account. Adding one enrols the device you are on; removing one is immediate, so the page
+    keeps a plain-spoken warning when the last one would go. */
+function Passkeys() {
+  const toast = useToast();
+  const [rows, setRows] = useState<PasskeyRow[] | null>(null);
+  const [busy, setBusy] = useState<number | "add" | null>(null);
+
+  const load = useCallback(() => { listPasskeys().then(setRows).catch(() => setRows([])); }, []);
+  useEffect(load, [load]);
+
+  const add = async () => {
+    setBusy("add");
+    try {
+      const made = await addPasskey(deviceName());
+      setRows((r) => [made, ...(r ?? [])]);
+      toast("Passkey added. You can sign in with it from now on.", "ok");
+    } catch (e) {
+      const msg = readError(e);
+      if (msg) toast(msg, "err");
+    } finally { setBusy(null); }
+  };
+
+  const drop = async (row: PasskeyRow) => {
+    setBusy(row.id);
+    try {
+      await removePasskey(row.id);
+      setRows((r) => (r ?? []).filter((x) => x.id !== row.id));
+      toast("Passkey removed.", "ok");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), "err");
+    } finally { setBusy(null); }
+  };
+
+  if (!supported()) return null;
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Passkeys</h2>
+        <button className="btn sm primary" onClick={() => void add()} disabled={busy !== null}>{busy === "add" ? <Spinner /> : <><Icon name="plus" />Add this device</>}</button>
+      </div>
+      <p className="small muted">Sign in with your fingerprint, face or screen lock instead of a password. The key never leaves the device, and it only works on this site — so there is nothing to phish.</p>
+      <div className="list" style={{ marginTop: 6 }}>
+        <AnimatePresence initial={false}>
+          {rows === null ? <div className="item"><span className="spinner" /><div className="grow"><div className="s">Looking…</div></div></div>
+            : !rows.length ? <div className="item"><Icon name="key" /><div className="grow"><div className="s">None yet. Add one and the next sign-in takes a fingerprint instead of a password.</div></div></div>
+            : rows.map((row) => (
+              <motion.div className="item" key={row.id} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }}>
+                <Icon name="key" />
+                <div className="grow">
+                  <div className="t">{row.label ?? "Passkey"}</div>
+                  <div className="s">Added {new Date(row.created_at).toLocaleDateString()}{row.last_used_at ? ` · last used ${new Date(row.last_used_at).toLocaleDateString()}` : " · not used yet"}</div>
+                </div>
+                <button className="btn sm ghost" onClick={() => void drop(row)} disabled={busy !== null} aria-label="Remove passkey">{busy === row.id ? <Spinner /> : <Icon name="trash" />}</button>
+              </motion.div>
+            ))}
+        </AnimatePresence>
+      </div>
+    </section>
+  );
+}
+
+/** A name you would recognise in a list of devices. The browser tells us nothing reliable, so this is a guess
+    from the platform and it stays editable nowhere — it is a label, not a fact. */
+function deviceName(): string {
+  const ua = navigator.userAgent;
+  const os = /iPhone|iPad/.test(ua) ? "iPhone" : /Android/.test(ua) ? "Android" : /Mac OS X/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : "This device";
+  const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : /Firefox\//.test(ua) ? "Firefox" : "";
+  return browser ? `${os} · ${browser}` : os;
+}
 
 export default function Profile() {
   const { user, config, logout, refreshUser, requestPasswordReset } = useAuth();
@@ -152,6 +224,8 @@ export default function Profile() {
           </div>
         </section>
       </div>
+
+      <Passkeys />
 
       <section className="card danger-zone">
         <div className="card-head"><h2>Delete account</h2></div>

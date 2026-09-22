@@ -38,11 +38,12 @@ from pydantic import BaseModel, Field, create_model
 from . import __version__
 from .config import Settings, load_settings
 from .db import Database, database_for
-from .db.repository import Repository, Transaction
+from .db.repository import Repository, Transaction, merchant_key
 from .db.seed import seed_demo_data
 from .ingestion.importer import Importer
 from .llm.prompts import schema_doc
 from .llm.provider import SAMPLING_SYSTEM, LLMProvider, RuleBasedProvider, SampledProvider, get_provider, parse_sampled, sampling_prompt
+from .services.autopay import run_autopay
 from .services.categorize import NEEDS_REVIEW_BELOW, Categorizer
 from .services.emis import emi_report, emi_status
 from .services.entry import parse_entry as read_entry_line
@@ -67,7 +68,7 @@ Conventions
 How to work
 - Start with get_overview for "how am I doing": spend, pace, safe-to-spend, upcoming bills, alerts, goals.
 - For "how much / top / breakdown" questions prefer get_summary (fast, exact) and get_budget_summary for budgets.
-- list_recurring finds subscriptions and bills with their next due date.
+- list_recurring finds subscriptions and bills with their next due date; set_autopay files one on its own from then on.
 - For anything the summaries cannot express, use query_transactions (natural language) or run_sql (read-only
   PostgreSQL SELECT on v_transactions; read the finmcp://schema resource first).
 - add_transaction auto-categorizes. If your client offers sampling, the server uses your model for it; if it offers
@@ -765,6 +766,48 @@ def create_server(settings: Settings | None = None, *, db: Database | None = Non
     def list_recurring_tool(ctx: Context) -> dict[str, Any]:
         """Subscriptions, bills, rent and SIPs detected from payment rhythm: cadence, typical amount, next due date, monthly cost."""
         return list_recurring(tenant(ctx).repo)
+
+    @server.tool(annotations=WRITE)
+    @_tool_errors
+    def set_autopay(
+        ctx: Context,
+        merchant: Annotated[str, Field(description="The merchant exactly as list_recurring reports it")],
+        active: Annotated[bool, Field(description="False turns an existing standing instruction off without forgetting it")] = True,
+        amount: Annotated[float | None, Field(description="What to file each cycle; defaults to the detected typical amount", gt=0)] = None,
+        next_due: Annotated[str | None, Field(description="ISO date of the next cycle to file; defaults to the detected one")] = None,
+    ) -> dict[str, Any]:
+        """Put a detected bill on autopay, so its entries are filed on their due date without being typed.
+
+        The bill has to have been detected first: autopay says what to do about a rhythm this account already has,
+        it does not invent one. Turning it off keeps the rule and its history."""
+        st = tenant(ctx)
+        found = next((i for i in list_recurring(st.repo)["items"] if i["merchant"].lower() == merchant.strip().lower()), None)
+        if found is None:
+            existing = st.repo.get_autopay(merchant_key(merchant))
+            if existing is None:
+                raise ToolError(f"No recurring payment to {merchant!r} yet. Three regular payments to the same merchant make a bill.")
+            row = st.repo.set_autopay_active(merchant, active)
+            return {"autopay": row}
+        row = st.repo.upsert_autopay(
+            merchant=found["merchant"], amount=float(amount if amount is not None else found["amount"]),
+            cadence=str(found["cadence"]), cadence_days=int(found["cadence_days"]), category=found.get("category"),
+            next_due=str(next_due or found["next_due"]), active=bool(active),
+        )
+        return {"autopay": row, "detected": {"cadence": found["cadence"], "amount": found["amount"], "next_due": found["next_due"]}}
+
+    @server.tool(annotations=DESTRUCTIVE)
+    @_tool_errors
+    def clear_autopay(ctx: Context, merchant: Annotated[str, Field(description="The merchant whose standing instruction to forget")]) -> dict[str, Any]:
+        """Forget a standing instruction entirely, along with its record of what it has filed. Entries it already
+        wrote stay in the ledger; use delete_transaction for those."""
+        return {"cleared": tenant(ctx).repo.delete_autopay(merchant)}
+
+    @server.tool(name="run_autopay", annotations=WRITE)
+    @_tool_errors
+    def run_autopay_tool(ctx: Context) -> dict[str, Any]:
+        """File every autopay cycle whose date has passed. Idempotent: a cycle already in the ledger is recognised
+        and skipped, so calling this twice does not pay a bill twice."""
+        return run_autopay(tenant(ctx).repo)
 
     # ------------------------------------------------------------------ tools: goals
 

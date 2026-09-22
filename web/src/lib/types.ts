@@ -114,9 +114,23 @@ export interface Recurring {
   regularity: number;
   monthly_cost: number;
   transaction_ids: number[];
+  /** What this bill has actually cost, counted from the payments themselves. */
+  first_date: string;
+  paid_total: number;
+  paid_12m: number;
+  paid_this_year: number;
+  count_this_year: number;
+  /** The standing instruction, when there is one. Null means nobody has asked us to file this one. */
+  autopay: AutopayRule | null;
 }
 
-export interface RecurringReport { count: number; monthly_total: number; monthly_expenses: number; upcoming: Recurring[]; items: Recurring[]; checked_at: string }
+export interface AutopayRule { active: boolean; amount: number; next_due: string; posted_count: number; last_posted_on: string | null }
+
+export interface RecurringReport {
+  count: number; monthly_total: number; monthly_expenses: number; paid_12m: number;
+  autopay_count: number; autopay_monthly: number;
+  upcoming: Recurring[]; items: Recurring[]; checked_at: string;
+}
 
 export interface Emi {
   id: number;

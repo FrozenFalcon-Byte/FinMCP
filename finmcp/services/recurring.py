@@ -110,6 +110,12 @@ def detect_recurring(rows: list[dict[str, Any]], today: date | None = None, *, m
             "days_until": days_until,
             "status": status,
             "occurrences": len(series),
+            # What this bill has actually cost, counted from the payments themselves rather than from the cadence.
+            "first_date": dates[0].isoformat(),
+            "paid_total": round(sum(float(a) for a in amounts), 2),
+            "paid_12m": round(sum(float(r["amount"]) for r, d in zip(series, dates, strict=True) if (today - d).days <= 365), 2),
+            "paid_this_year": round(sum(float(r["amount"]) for r, d in zip(series, dates, strict=True) if d.year == today.year), 2),
+            "count_this_year": sum(1 for d in dates if d.year == today.year),
             "regularity": round(regular, 2),
             "monthly_cost": round(amount * 30.4375 / days, 2),
             "transaction_ids": [i for r in series[-3:] for i in r["ids"]],
@@ -120,9 +126,21 @@ def detect_recurring(rows: list[dict[str, Any]], today: date | None = None, *, m
 
 def list_recurring(repo: Repository, today: date | None = None, *, days: int = 400) -> dict[str, Any]:
     items = detect_recurring(repo.debit_history(days), today)
+    # Standing instructions are stitched on rather than detected: the list stays a reading of history, and autopay
+    # is what the account has said about it.
+    rules = {str(r["merchant_key"]): {
+        "active": bool(r["active"]), "amount": float(r["amount"]), "next_due": str(r["next_due"]),
+        "posted_count": int(r["posted_count"]), "last_posted_on": str(r["last_posted_on"]) if r["last_posted_on"] else None,
+    } for r in repo.list_autopay()}
+    for item in items:
+        item["autopay"] = rules.get(str(item["key"]))
     expenses = [i for i in items if i["category_kind"] != "transfer"]
+    on_autopay = [i for i in items if i.get("autopay") and i["autopay"]["active"]]
     return {
         "count": len(items),
+        "autopay_count": len(on_autopay),
+        "autopay_monthly": round(sum(i["monthly_cost"] for i in on_autopay), 2),
+        "paid_12m": round(sum(i["paid_12m"] for i in expenses), 2),
         "monthly_total": round(sum(i["monthly_cost"] for i in items), 2),
         "monthly_expenses": round(sum(i["monthly_cost"] for i in expenses), 2),
         "upcoming": [i for i in items if -2 <= i["days_until"] <= 14],
