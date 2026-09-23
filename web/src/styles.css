@@ -860,14 +860,17 @@ button { cursor: pointer; }
 @media (max-width: 560px) { .qa-backdrop { place-items: end center; padding: 0; } .qa-card { border-radius: 28px 28px 0 0; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); } .qa-hint { display: none; } }
 
 /* Budgets */
-.bud-hero { display: flex; align-items: center; gap: 26px; flex-wrap: wrap; margin-bottom: 16px; }
+.bud-hero { display: flex; align-items: center; gap: clamp(18px, 3vw, 26px); flex-wrap: wrap; margin-bottom: 16px; }
+.bud-hero .grow { flex: 1 1 260px; }
 .bud-hero .k { font-size: 13px; color: var(--ink-3); font-weight: 600; }
 .bud-hero .big { font-size: clamp(30px, 7.4vw, 44px); font-weight: 800; line-height: 1.1; letter-spacing: -.035em; margin: 2px 0 6px; }
 .bud-hero .big.bad { color: var(--bad); }
 .bud-hero .s { font-size: 13.5px; color: var(--ink-3); }
 .bud-hero .s b { color: var(--ink); }
-.bud-filter { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(128px, 46%), 1fr)); gap: 6px; }
-.bud-filter button { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 14px; min-width: 128px; height: 40px; padding: 0 14px; border: 0; border-radius: 14px; background: var(--surface-2); font-size: 13px; font-weight: 600; color: var(--ink-2); cursor: pointer; transition: color .2s; }
+/* A 2 × 2 block with a width of its own. It used to size its columns in percent of a box that had no width to
+   be a percent of, so the columns came out narrower than the buttons and the counts hung off the card. */
+.bud-filter { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; flex: 0 1 300px; min-width: min(100%, 250px); margin-left: auto; }
+.bud-filter button { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; height: 40px; padding: 0 14px; border: 0; border-radius: 14px; background: var(--surface-2); white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--ink-2); cursor: pointer; transition: color .2s; }
 .bud-filter button .l, .bud-filter button .c { position: relative; z-index: 1; }
 .bud-filter button .c { font-variant-numeric: tabular-nums; color: var(--ink-3); }
 .bud-filter .pill { position: absolute; inset: 0; border-radius: 14px; background: var(--ink); }
@@ -908,7 +911,7 @@ button { cursor: pointer; }
 .bud-chip .n { font-weight: 600; } .bud-chip .num { color: var(--ink-3); }
 .bud-chip .add { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-2); font-weight: 700; font-size: 12px; }
 .bud-chip .add svg { width: 12px; height: 12px; }
-@media (max-width: 640px) { .bud-hero { gap: 18px; } .bud-filter { width: 100%; } .bud-filter button { min-width: 0; } }
+@media (max-width: 640px) { .bud-hero { gap: 18px; } .bud-filter { flex-basis: 100%; margin-left: 0; } }
 .form-hero { padding: 4px 0 6px; }
 .form-hero .v-wrap { overflow: hidden; min-height: 50px; display: flex; align-items: flex-end; }
 .form-hero .v { font-size: clamp(28px, 7vw, 40px); font-weight: 800; letter-spacing: -.035em; line-height: 1.15; display: inline-block; }
