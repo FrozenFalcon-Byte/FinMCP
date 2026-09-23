@@ -29,6 +29,7 @@ import Landing from "./screens/Landing";
 import Mcp from "./screens/Mcp";
 import Onboarding from "./screens/Onboarding";
 import Profile from "./screens/Profile";
+import Reports from "./screens/Reports";
 import ResetPassword from "./screens/ResetPassword";
 import Settings from "./screens/Settings";
 import Subscriptions from "./screens/Subscriptions";
@@ -38,6 +39,7 @@ const NAV: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: "/app", label: "Home", icon: "home", end: true },
   { to: "/app/transactions", label: "Transactions", icon: "list" },
   { to: "/app/budgets", label: "Budgets", icon: "budget" },
+  { to: "/app/reports", label: "Reports", icon: "chart" },
   { to: "/app/goals", label: "Goals", icon: "goal" },
   { to: "/app/subscriptions", label: "Subscriptions", icon: "repeat" },
   { to: "/app/emis", label: "EMIs", icon: "calendar" },
@@ -90,7 +92,7 @@ function Sidebar() {
 function TabBar() {
   const [more, setMore] = useState(false);
   const location = useLocation();
-  const moreActive = ["/app/goals", "/app/subscriptions", "/app/emis", "/app/import", "/app/mcp", "/app/connect", "/app/activity", "/app/profile", "/app/settings"].some((p) => location.pathname.startsWith(p));
+  const moreActive = ["/app/reports", "/app/goals", "/app/subscriptions", "/app/emis", "/app/import", "/app/mcp", "/app/connect", "/app/activity", "/app/profile", "/app/settings"].some((p) => location.pathname.startsWith(p));
   return (
     <>
       <nav className="tabbar">
@@ -102,7 +104,7 @@ function TabBar() {
       </nav>
       <Sheet open={more} onClose={() => setMore(false)} title="More">
         <div className="nav">
-          {[...NAV.slice(3, 6), ...NAV.slice(7), ...NAV_2].map((n) => <NavLink key={n.to} to={n.to} onClick={() => setMore(false)}><Icon name={n.icon} />{n.label}</NavLink>)}
+          {[...NAV.slice(3, 7), ...NAV.slice(8), ...NAV_2].map((n) => <NavLink key={n.to} to={n.to} onClick={() => setMore(false)}><Icon name={n.icon} />{n.label}</NavLink>)}
         </div>
         <SignOutButton className="btn block signout" onDone={() => setMore(false)} />
       </Sheet>
@@ -143,6 +145,7 @@ function Shell() {
                 <Route index element={<Home />} />
                 <Route path="transactions" element={<Transactions />} />
                 <Route path="budgets" element={<Budgets />} />
+                <Route path="reports" element={<Reports />} />
                 <Route path="goals" element={<Goals />} />
                 <Route path="subscriptions" element={<Subscriptions />} />
                 <Route path="emis" element={<Emis />} />

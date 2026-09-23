@@ -15,7 +15,7 @@ import { Icon, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { compact, isoLocal, money } from "../lib/format";
-import { squarePhoto } from "../lib/photo";
+import { PhotoCrop } from "../components/PhotoCrop";
 import type { Category } from "../lib/types";
 import "./onboarding.css";
 
@@ -222,6 +222,7 @@ export default function Onboarding() {
   }, []);
 
   const current = STEPS[step];
+  const [picked, setPicked] = useState<File | null>(null);
   const ok = current.done(d);
   useEffect(() => { setNudge(null); }, [step]);
 
@@ -232,9 +233,11 @@ export default function Onboarding() {
     return { ...p, picks };
   });
 
-  const photo = async (file: File | undefined) => {
+  // Picking a file opens the same cropper the profile uses; nothing is kept until the circle is framed.
+  const photo = (file: File | undefined) => {
     if (!file) return;
-    try { set("avatar", await squarePhoto(file)); } catch (e) { toast(e instanceof Error ? e.message : "Could not read that image.", "err"); }
+    if (!file.type.startsWith("image/")) { toast("That file is not an image.", "err"); return; }
+    setPicked(file);
   };
 
   const finish = async () => {
@@ -310,16 +313,16 @@ export default function Onboarding() {
                   </label>
                   <div className="onb-photo">
                     <button type="button" className={`drop ${d.avatar ? "has" : ""}`} onClick={() => fileRef.current?.click()}
-                      onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void photo(e.dataTransfer.files[0]); }}>
+                      onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); photo(e.dataTransfer.files[0]); }}>
                       {d.avatar ? <img src={d.avatar} alt="Your photo" /> : <Icon name="user" />}
                       <span className="badge"><Icon name="plus" /></span>
                     </button>
                     <div className="onb-photo-side">
                       <span className="lab">Photo <i className="opt">optional</i></span>
-                      <p>{d.avatar ? "Cropped square and kept small, so it follows your account." : "Click the circle or drop an image on it. Cropped square and kept small."}</p>
+                      <p>{d.avatar ? "Framed by you, kept small, and it follows your account." : "Click the circle or drop an image on it — you get to frame it."}</p>
                       {d.avatar ? <button type="button" className="onb-link" onClick={() => set("avatar", null)}>Remove</button> : null}
                     </div>
-                    <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { void photo(e.target.files?.[0]); e.target.value = ""; }} />
+                    <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { photo(e.target.files?.[0]); e.target.value = ""; }} />
                   </div>
                 </div>
               ) : null}
@@ -442,6 +445,7 @@ export default function Onboarding() {
           </div>
         </div>
       </div>
+      <PhotoCrop file={picked} onCancel={() => setPicked(null)} onSave={(url) => { set("avatar", url); setPicked(null); }} />
     </div>
   );
 }

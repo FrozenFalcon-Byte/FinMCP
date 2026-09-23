@@ -52,6 +52,7 @@ from .services.periods import resolve_period
 from .services.recurring import CADENCE_DAYS, list_recurring, next_due_after
 from .services.summary import check_budget_alerts, get_budget_summary, get_summary
 from .services.text_to_sql import QueryService
+from .services.trends import MAX_MONTHS, get_trends
 from .subscriptions import RoutedBus
 from .taxonomy import resolve_category_name, seed_categories
 
@@ -760,6 +761,18 @@ def create_server(settings: Settings | None = None, *, db: Database | None = Non
     ) -> dict[str, Any]:
         """Proactive budget check: categories that are exceeded, past the warning threshold, or on pace to exceed their limit by month end."""
         return check_budget_alerts(tenant(ctx).repo, month, warn_at_pct)
+
+    @server.tool(name="get_trends", annotations=READ)
+    @_tool_errors
+    def get_trends_tool(
+        ctx: Context,
+        months: Annotated[int, Field(ge=2, le=MAX_MONTHS, description="How many calendar months to look back over, ending with this one")] = 6,
+        top: Annotated[int, Field(ge=1, le=30, description="How many categories to break out before the rest are merged")] = 8,
+    ) -> dict[str, Any]:
+        """Month-over-month trends: spend and income per month, each category's path across those months, what moved
+        most against its own average, and the few sentences that describe the shape. The month in progress is marked
+        `partial` and carries a straight-line projection, so it is never silently compared against whole months."""
+        return get_trends(tenant(ctx).repo, months, top=top)
 
     @server.tool(name="list_recurring", annotations=READ)
     @_tool_errors

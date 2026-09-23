@@ -9,7 +9,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { money, num } from "../lib/format";
 import { addPasskey, listPasskeys, readError, removePasskey, supported, type PasskeyRow } from "../lib/passkey";
-import { squarePhoto } from "../lib/photo";
+import { PhotoCrop } from "../components/PhotoCrop";
 import { useLedger } from "../lib/ledger";
 import type { BudgetSummary } from "../lib/types";
 import { useApi } from "../lib/useApi";
@@ -98,6 +98,7 @@ export default function Profile() {
   const [keepPct, setKeepPct] = useState(user?.keep_pct ?? 20);
   const [busy, setBusy] = useState<"save" | "reset" | "delete" | "photo" | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [picked, setPicked] = useState<File | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [phrase, setPhrase] = useState("");
   if (!user) return null;
@@ -129,19 +130,25 @@ export default function Profile() {
       setBusy(null);
     }
   };
-  /** The photo is stored on the profile row as a small square, so it follows the account onto any device. */
-  const setPhoto = async (file: File | undefined | null) => {
-    if (!file) return;
+  /** The photo is stored on the profile row as a small square, so it follows the account onto any device. The
+      square is the one the person framed themselves — picking a file opens the cropper, it does not save. */
+  const savePhoto = async (avatar: string) => {
     setBusy("photo");
     try {
-      await api.patch("/auth/profile", { avatar: await squarePhoto(file) });
+      await api.patch("/auth/profile", { avatar });
       await refreshUser();
+      setPicked(null);
       toast("Photo updated.");
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), "err");
     } finally {
       setBusy(null);
     }
+  };
+  const pick = (file: File | undefined | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast("That file is not an image.", "err"); return; }
+    setPicked(file);
   };
   const clearPhoto = async () => {
     setBusy("photo");
@@ -176,11 +183,11 @@ export default function Profile() {
       <section className="card profile-hero">
         <button type="button" className="profile-pfp" onClick={() => fileRef.current?.click()} disabled={busy === "photo"}
           title="Change your photo" aria-label="Change your photo"
-          onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void setPhoto(e.dataTransfer.files[0]); }}>
+          onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); pick(e.dataTransfer.files[0]); }}>
           <Avatar name={user.name} src={user.avatar} lg />
           <span className="edit">{busy === "photo" ? <Spinner /> : <Icon name="edit" />}</span>
         </button>
-        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { void setPhoto(e.target.files?.[0]); e.target.value = ""; }} />
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
         <div className="who">
           <h2>{user.name}</h2>
           <div className="muted">{user.email}</div>
@@ -243,6 +250,7 @@ export default function Profile() {
         <p className="small muted">Erases every transaction, category, goal, token and the activity trail. There is no undo.</p>
         <button className="btn danger sm" style={{ marginTop: 12 }} onClick={() => setConfirmDelete(true)}><Icon name="trash" />Delete my account and data</button>
       </section>
+      <PhotoCrop file={picked} busy={busy === "photo"} onCancel={() => setPicked(null)} onSave={(url) => void savePhoto(url)} />
       <Sheet open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete everything?" sub="Type DELETE to confirm.">
         <div className="stack">
           <input className="input" value={phrase} onChange={(e) => setPhrase(e.target.value)} placeholder="DELETE" autoFocus />

@@ -278,6 +278,11 @@ async def summary(period: str = "this month", group_by: Literal["category", "mer
     return await call_tool(ctx, "get_summary", {"period": period, "group_by": group_by, "top": top})
 
 
+@router.get("/trends")
+async def trends(months: int = Query(6, ge=2, le=24), top: int = Query(8, ge=1, le=30), ctx: AppContext = Depends(get_ctx)) -> Any:
+    return await call_tool(ctx, "get_trends", {"months": months, "top": top})
+
+
 @router.get("/budget")
 async def budget(month: str | None = None, ctx: AppContext = Depends(get_ctx)) -> Any:
     return await call_tool(ctx, "get_budget_summary", {"month": month} if month else {})

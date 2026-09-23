@@ -8,7 +8,7 @@ You track money in a calm web app: add an expense in plain words, see what you h
 Web app ──┐
 Assistant ─┤                        ┌── categorisation memory
 Claude Desktop ─┼──► FinMCP MCP server ├── budgets, recurring detection, goals
-Claude Code ────┤   (33 tools, 13 resources, 4 prompts)   ├── statement / receipt / SMS parsing
+Claude Code ────┤   (34 tools, 13 resources, 4 prompts)   ├── statement / receipt / SMS parsing
 Cursor, scripts ┘                        └── read-only SQL over your rows
                               │
                               ▼
@@ -48,6 +48,7 @@ Server-to-client requests are declared as SDK resolvers (`Resolve`, `Elicit`, `S
 | Home | Spent this month, pace vs last month, safe-to-spend per day, what is coming, three insights | `get_overview`, `get_summary` |
 | Transactions | Search, filter, edit, categorise; every correction teaches the categoriser | `list_transactions`, `update_transaction`, `categorize_uncategorized` |
 | Budgets | Spend vs limit with month-end projection, one-click suggestions from your 3-month average | `get_budget_summary`, `set_budget`, `check_budget_alerts` |
+| Reports | Month-over-month spend and income, category heatmap, biggest movers against their own average, plain-language notes, CSV export | `get_trends` |
 | Goals | Targets with a deadline and the monthly amount needed | `list_goals`, `upsert_goal`, `add_to_goal` |
 | Subscriptions | Bills and subscriptions detected from payment rhythm, next due dates, monthly cost | `list_recurring` |
 | Ask | Chat with an agent that picks tools and shows its calls | everything |
@@ -138,7 +139,7 @@ The endpoint is Streamable HTTP at `/mcp`, bearer-token authenticated, one serve
 
 ```
 finmcp/                 the MCP server and everything it owns
-  server.py             33 tools, 13 resources, 4 prompts; per-account TenantState; principal from the request
+  server.py             34 tools, 13 resources, 4 prompts; per-account TenantState; principal from the request
   db/database.py        psycopg pool, migrations, Database.tenant(user_id) = RLS-scoped transaction
   db/repository.py      every SQL statement; writes stamped with the client and published on the change feed
   db/accounts.py        profiles, local password accounts, personal MCP tokens

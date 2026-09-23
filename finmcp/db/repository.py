@@ -462,6 +462,17 @@ class Repository:
             (self.user_id, max(0, months - 1), self.user_id),
         )
 
+    def monthly_rollup(self, since_month: str) -> list[dict[str, Any]]:
+        """Every month from `since_month` (YYYY-MM) onward, one row per category.
+
+        `monthly_by_category` anchors on the last transaction, which is what a categoriser wants; a report is read
+        against the calendar the person is living in, so this one anchors on a month the caller names."""
+        return self._all(
+            """SELECT month, category, category_kind, spent, received, n FROM monthly_summary
+               WHERE user_id = %s AND month >= %s ORDER BY month, spent DESC""",
+            (self.user_id, since_month),
+        )
+
     def date_bounds(self) -> tuple[str | None, str | None]:
         row = self._one("SELECT MIN(date) AS first, MAX(date) AS last FROM transactions WHERE user_id = %s", (self.user_id,))
         return (row["first"], row["last"]) if row else (None, None)

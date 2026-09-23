@@ -71,7 +71,8 @@ export function Ring({ pct, size = 84, stroke = 9, tone, children }: { pct: numb
   const clamped = Math.max(0, Math.min(100, pct));
   const t = tone ?? (pct >= 100 ? "bad" : "");
   return (
-    <div className={`ring ${t}`} style={{ width: size, height: size }}>
+    // The size arrives as a variable rather than a width, so a cramped card can cap it in CSS (see `--ring-fit`).
+    <div className={`ring ${t}`} style={{ "--ring": `${size}px` } as React.CSSProperties}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle className="track" cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} />
         <motion.circle className="fill" cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} strokeDasharray={c}
@@ -225,7 +226,8 @@ export function ClientPill({ name }: { name: string | null | undefined }) {
 export type IconName =
   | "home" | "list" | "budget" | "goal" | "repeat" | "chat" | "upload" | "plug" | "activity" | "settings" | "send" | "trash" | "refresh" | "wand"
   | "x" | "plus" | "search" | "arrowRight" | "arrowUp" | "arrowDown" | "check" | "enter" | "undo" | "spark" | "logo" | "copy" | "key" | "menu"
-  | "download" | "edit" | "shield" | "bolt" | "calendar" | "more" | "logout" | "user" | "alert" | "pause" | "play" | "camera";
+  | "download" | "edit" | "shield" | "bolt" | "calendar" | "more" | "logout" | "user" | "alert" | "pause" | "play" | "camera"
+  | "chart" | "crop" | "zoomIn" | "zoomOut" | "rotate";
 
 export function Icon({ name, className }: { name: IconName; className?: string }) {
   const common = { className, width: "1em", height: "1em", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, viewBox: "0 0 24 24", "aria-hidden": true };
@@ -233,6 +235,11 @@ export function Icon({ name, className }: { name: IconName; className?: string }
     case "alert": return <svg {...common}><path d="M12 3.5 2.8 19.5h18.4z" /><path d="M12 10v4M12 17.2h.01" /></svg>;
     case "pause": return <svg {...common}><path d="M9 5v14M15 5v14" /></svg>;
     case "play": return <svg {...common}><path d="M7 4.8v14.4l12-7.2z" /></svg>;
+    case "chart": return <svg {...common}><path d="M4 20V4M4 20h16" /><path d="M8 20v-6M12.5 20V8M17 20v-9" /></svg>;
+    case "crop": return <svg {...common}><path d="M6.5 2.5v15h15M2.5 6.5h15v15" /></svg>;
+    case "zoomIn": return <svg {...common}><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.2-4.2M11 8.5v5M8.5 11h5" /></svg>;
+    case "zoomOut": return <svg {...common}><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.2-4.2M8.5 11h5" /></svg>;
+    case "rotate": return <svg {...common}><path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5" /></svg>;
     case "camera": return <svg {...common}><path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.4-2h7.8l1.4 2h2.2A1.5 1.5 0 0 1 21 8.5V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z" /><circle cx="12" cy="13" r="3.4" /></svg>;
     case "home": return <svg {...common}><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z" /></svg>;
     case "list": return <svg {...common}><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" /></svg>;

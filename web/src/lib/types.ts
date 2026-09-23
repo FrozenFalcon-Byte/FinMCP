@@ -200,6 +200,37 @@ export interface Overview {
   week_end: string;
 }
 
+export interface TrendMonth {
+  month: string; label: string; long_label: string;
+  spent: number; received: number; net: number; count: number;
+  /** The month we are living in: `spent` is only what has happened so far, `projected` is where it is heading. */
+  partial: boolean; projected: number;
+}
+
+export interface TrendCategory {
+  category: string; kind: string; total: number;
+  average: number | null; latest: number; compared: number;
+  change: number | null; change_pct: number | null; share_pct: number | null;
+  months: Record<string, number>;
+  /** The tail of small categories, merged into one row rather than dropped. */
+  aggregate?: boolean;
+}
+
+export interface Trends {
+  months: number;
+  window: { from: string; to: string };
+  compare_month: string;
+  compare_is_projected: boolean;
+  series: TrendMonth[];
+  totals: {
+    spent: number; received: number; net: number; average_spent: number; months_with_data: number;
+    saved_pct: number | null; highest: string | null; lowest: string | null;
+  };
+  categories: TrendCategory[];
+  movers: TrendCategory[];
+  insights: Insight[];
+}
+
 export interface ActivityItem {
   id: number;
   ts: string;

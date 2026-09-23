@@ -9,6 +9,13 @@ import { useStatus } from "../lib/status";
 import type { Overview, Summary } from "../lib/types";
 import { useApi } from "../lib/useApi";
 
+/** How far back the hero line looks. Remembered per browser: it is a way of reading the page, not a setting. */
+const SPANS = [7, 30, 90] as const;
+type Span = (typeof SPANS)[number];
+function savedSpan(): Span {
+  try { const n = Number(localStorage.getItem("home.span")); return (SPANS as readonly number[]).includes(n) ? (n as Span) : 30; } catch { return 30; }
+}
+
 function first(name: string): string {
   return name.trim().split(/\s+/)[0] || "there";
 }
@@ -18,21 +25,23 @@ export default function Home() {
   const { currency } = useStatus();
   const navigate = useNavigate();
   const ov = useApi(() => api.get<Overview>("/overview"), []);
-  const daily = useApi(() => api.get<Summary>("/summary", { period: "last 30 days", group_by: "day" }), []);
+  const [span, setSpan] = useState<Span>(savedSpan);
+  const pickSpan = (n: Span) => { setSpan(n); try { localStorage.setItem("home.span", String(n)); } catch { /* private window */ } };
+  const daily = useApi(() => api.get<Summary>("/summary", { period: `last ${span} days`, group_by: "day" }), [span]);
 
   const spark = useMemo(() => {
     const rows = daily.data?.breakdown ?? [];
     const byDay = new Map(rows.map((r) => [r.day as string, r.spent]));
     const out: { d: string; v: number }[] = [];
     const end = new Date();
-    for (let i = 29; i >= 0; i--) {
+    for (let i = span - 1; i >= 0; i--) {
       const d = new Date(end);
       d.setDate(end.getDate() - i);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       out.push({ d: key, v: byDay.get(key) ?? 0 });
     }
     return out;
-  }, [daily.data]);
+  }, [daily.data, span]);
 
   const o = ov.data;
   const pace = o?.pace_pct;
@@ -69,6 +78,17 @@ export default function Home() {
               <span>of budget</span>
             </Ring>
           ) : null}
+        </div>
+        <div className="spark-head">
+          <span className="label">Daily spend · last {span} days</span>
+          <div className="seg sm" role="group" aria-label="How many days the line covers">
+            {SPANS.map((n) => (
+              <button key={n} type="button" className={span === n ? "on" : ""} onClick={() => pickSpan(n)} aria-pressed={span === n}>
+                {span === n ? <motion.span layoutId="spark-pill" className="pill" transition={{ type: "spring", stiffness: 480, damping: 38 }} /> : null}
+                <span>{n}d</span>
+              </button>
+            ))}
+          </div>
         </div>
         {spark.length && daily.data
           ? <Sparkline values={spark.map((p) => p.v)} labels={spark.map((p) => dayLabel(p.d))} format={(v) => money(v, currency)} empty="nothing spent" />
