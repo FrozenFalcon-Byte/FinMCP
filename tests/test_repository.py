@@ -35,6 +35,18 @@ def test_merchant_key_normalises():
     assert merchant_key("POS 4321XXXX AMAZON PAY INDIA") == "amazon pay"
 
 
+@pytest.mark.parametrize("merchant, expected", [
+    ("7-Eleven", "7 eleven"),
+    ("1mg", "1mg"),
+    ("99acres", "99acres"),
+    ("24Seven", "24seven"),
+    ("7-Eleven ORDER 8812", "7 eleven"),
+    ("Swiggy ORDER 9876", "swiggy"),
+])
+def test_merchant_key_preserves_name_digits(merchant, expected):
+    assert merchant_key(merchant) == expected
+
+
 def test_list_filters(repo):
     food = repo.get_category("Food & Dining").id
     repo.insert_transaction(date="2026-09-01", amount=100, merchant="Swiggy", category_id=food)
