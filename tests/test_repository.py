@@ -33,6 +33,9 @@ def test_fingerprint_dedupe(repo):
 def test_merchant_key_normalises():
     assert merchant_key("SWIGGY*ORDER 8812") == merchant_key("Swiggy") == "swiggy"
     assert merchant_key("POS 4321XXXX AMAZON PAY INDIA") == "amazon pay"
+    assert merchant_key("7-Eleven") == "7 eleven"
+    assert merchant_key("1mg") == "1mg"
+    assert merchant_key("99acres") == "99acres"
 
 
 @pytest.mark.parametrize("merchant, expected", [

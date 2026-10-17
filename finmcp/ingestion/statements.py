@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .common import clean_text, find_date, merchant_from_narration, parse_amount, parse_date
+from .common import clean_text, find_date, merchant_from_narration, parse_amount, parse_balance, parse_date
 from .models import ParsedTransaction, ParseResult
 
 HEADER_ALIASES: dict[str, tuple[str, ...]] = {
@@ -117,7 +117,7 @@ def rows_to_transactions(header: list[Any], rows: list[list[Any]], source: str, 
         out.append(ParsedTransaction(
             date=iso, amount=round(amount, 2), direction=direction, merchant=merchant_from_narration(desc) if desc else "UNKNOWN",
             description=desc or None, raw_text=raw, source=source, reference=cell(row, "ref"),
-            balance_after=parse_amount(cell(row, "balance")),
+            balance_after=parse_balance(cell(row, "balance")),
         ))
     return out, warnings
 
