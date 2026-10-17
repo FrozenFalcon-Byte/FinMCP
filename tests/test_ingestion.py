@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from finmcp.ingestion import Importer, detect_kind
-from finmcp.ingestion.common import merchant_from_narration, parse_amount, parse_date
+from finmcp.ingestion.common import merchant_from_narration, parse_amount, parse_balance, parse_date
 from finmcp.ingestion.receipts import parse_receipt, parse_receipt_text
 from finmcp.ingestion.sms import parse_sms, parse_sms_dump
 from finmcp.ingestion.statements import parse_csv, parse_csv_text, parse_pdf
@@ -31,6 +31,15 @@ def test_parse_amount():
     assert parse_amount("Rs. 385") == 385.0
     assert parse_amount("(463.50)") == -463.5
     assert parse_amount("-") is None and parse_amount("") is None
+
+
+def test_parse_balance():
+    assert parse_balance("1,200.00 Dr") == -1200.0
+    assert parse_balance("Rs. 1,200.00 DR") == -1200.0
+    assert parse_balance("1,200.00 Cr") == 1200.0
+    assert parse_balance("1,05,000.00") == 105000.0
+    assert parse_balance("(463.50)") == -463.5
+    assert parse_balance("-") is None and parse_balance("") is None and parse_balance(None) is None
 
 
 @pytest.mark.parametrize("narration,merchant", [
@@ -65,6 +74,12 @@ def test_csv_single_amount_column_with_type():
     text = "date,description,amount,type\n2026-09-01,Salary ACME,95000,CR\n2026-09-02,UPI/SWIGGY/1/Food,450,DR\n2026-09-03,POS AMAZON,-1200,\n"
     r = parse_csv_text(text)
     assert [(t.direction, t.amount) for t in r.transactions] == [("credit", 95000.0), ("debit", 450.0), ("credit", 1200.0)]
+
+
+def test_csv_dr_balance_is_negative():
+    text = 'date,description,amount,type,balance\n2026-09-01,UPI/SWIGGY/1/Food,450,DR,"1,200.00 Dr"\n2026-09-02,Salary ACME,95000,CR,"93,800.00 Cr"\n'
+    r = parse_csv_text(text)
+    assert [t.balance_after for t in r.transactions] == [-1200.0, 93800.0]
 
 
 def test_csv_without_header():

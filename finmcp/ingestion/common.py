@@ -66,6 +66,17 @@ def parse_amount(text: str | None) -> float | None:
     return -v if neg else v
 
 
+def parse_balance(text: str | None) -> float | None:
+    """Parse a balance cell. A trailing Dr marks an overdrawn balance, so it comes back negative; Cr stays positive."""
+    value = parse_amount(text)
+    if value is None:
+        return None
+    m = _AMOUNT.search(str(text))
+    if m and m.group(2) and m.group(2).strip().lower() == "dr":
+        return -abs(value)
+    return value
+
+
 CHANNELS = {"UPI", "POS", "NEFT", "IMPS", "ACH", "BBPS", "RTGS", "ATM", "ECOM", "NACH", "EMI", "CHQ", "MB", "IB", "NET",
             "NFS", "VPS", "TPT", "FT", "IMPS-OUT", "IMPS-IN", "NEFT-OUT", "NEFT-IN", "UPI-OUT", "UPI-IN", "ME", "DC", "CC"}
 PURPOSE_WORDS = {"SALARY", "RENT", "SIP", "PAYMENT", "TRANSFER", "P2P", "P2A", "P2M", "CR", "DR", "CASHBACK", "REFUND",
