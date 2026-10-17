@@ -88,8 +88,9 @@ _MERCHANT_NOISE = re.compile(
 def merchant_key(merchant: str) -> str:
     """Normalise a merchant string so 'SWIGGY*ORDER 8812' and 'Swiggy' share a key."""
     s = merchant.lower()
+    s = re.sub(r"\b\d+x+\b", " ", s)
     s = re.sub(r"[^a-z0-9\s]", " ", s)
-    s = re.sub(r"\d{4,}", " ", s)
+    s = re.sub(r"\b\d{4,}\b", " ", s)
     s = _MERCHANT_NOISE.sub(" ", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s[:60]
